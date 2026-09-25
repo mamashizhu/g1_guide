@@ -314,8 +314,27 @@ def _ensure_sensor_mount(
     root.append(joint)
 
 
-def _add_lidar_and_imu(root: ET.Element) -> None:
-    """Add low-rate Gazebo sensors on the official fixed G1 sensor frames."""
+# Livox MID-360 datasheet: 360° x (-7°..+52°), 0.1-40 m (10 % reflectivity), 10 Hz.
+# The real sensor scans a non-repetitive pattern; 360 x 30 rays at 10 Hz keeps
+# the same field of view at a point rate the local GPU simulates in real time.
+MID360_VERTICAL = (-0.12217304763960307, 0.9075712110370514, 30)
+MID360_RANGE = ("0.1", "40.0")
+LIDAR_MODELS = ("simple", "mid360")
+
+
+def _add_lidar_and_imu(root: ET.Element, lidar_model: str = "simple") -> None:
+    """Add low-rate Gazebo sensors on the official fixed G1 sensor frames.
+
+    ``simple``: the MID-360 mount carries a single-plane 2D scan (/scan) and a
+    level simulation-only lidar publishes /nav_scan.
+    ``mid360``: the MID-360 mount carries a 3D lidar with the real field of
+    view (/mid360/points); /nav_scan is produced from that cloud by
+    ``mid360_to_scan``, so nav_lidar_link stays as a frame without a sensor.
+    """
+
+    if lidar_model not in LIDAR_MODELS:
+        raise ValueError(f"lidar model must be one of {LIDAR_MODELS}")
+    real = lidar_model == "mid360"
 
     torso = "torso_link" if "torso_link" in _link_names(root) else _base_link(root)
     _ensure_sensor_mount(
@@ -347,12 +366,13 @@ def _add_lidar_and_imu(root: ET.Element) -> None:
     )
 
     lidar_gazebo = _element("gazebo", {"reference": "mid360_link"})
-    lidar = _element("sensor", {"name": "g1_2d_lidar", "type": "gpu_lidar"})
+    lidar = _element("sensor", {"name": "g1_mid360" if real else "g1_2d_lidar", "type": "gpu_lidar"})
     for tag, value in (
         ("always_on", "true"),
         ("visualize", "false"),
         ("update_rate", "10"),
-        ("topic", "/scan"),
+        # gz publishes a 3D lidar's cloud on <topic>/points.
+        ("topic", "/mid360" if real else "/scan"),
         ("gz_frame_id", "mid360_link"),
     ):
         child = _element(tag)
@@ -371,11 +391,20 @@ def _add_lidar_and_imu(root: ET.Element) -> None:
         child.text = value
         horizontal.append(child)
     scan.append(horizontal)
+    if real:
+        vertical = _element("vertical")
+        low, high, rows = MID360_VERTICAL
+        for tag, value in (("samples", str(rows)), ("resolution", "1"),
+                           ("min_angle", repr(low)), ("max_angle", repr(high))):
+            child = _element(tag)
+            child.text = value
+            vertical.append(child)
+        scan.append(vertical)
     lidar_spec.append(scan)
     distance = _element("range")
     for tag, value in (
-        ("min", "0.12"),
-        ("max", "8.0"),
+        ("min", MID360_RANGE[0] if real else "0.12"),
+        ("max", MID360_RANGE[1] if real else "8.0"),
         ("resolution", "0.01"),
     ):
         child = _element(tag)
@@ -386,6 +415,12 @@ def _add_lidar_and_imu(root: ET.Element) -> None:
     lidar_gazebo.append(lidar)
     root.append(lidar_gazebo)
 
+    if not real:
+        _add_nav_lidar(root, lidar_spec)
+    _add_imu(root)
+
+
+def _add_nav_lidar(root: ET.Element, lidar_spec: ET.Element) -> None:
     nav_gazebo = _element("gazebo", {"reference": "nav_lidar_link"})
     nav_lidar = _element("sensor", {"name": "g1_nav_lidar", "type": "gpu_lidar"})
     for tag, value in (
@@ -399,6 +434,8 @@ def _add_lidar_and_imu(root: ET.Element) -> None:
     nav_gazebo.append(nav_lidar)
     root.append(nav_gazebo)
 
+
+def _add_imu(root: ET.Element) -> None:
     imu_gazebo = _element("gazebo", {"reference": "imu_in_torso"})
     imu = _element("sensor", {"name": "g1_imu", "type": "imu"})
     for tag, value in (
@@ -470,7 +507,8 @@ def _indent(root: ET.Element) -> None:
     ET.indent(root, space="  ")
 
 
-def generate(source_path: Path, output_path: Path, g1_ws: Path) -> None:
+def generate(source_path: Path, output_path: Path, g1_ws: Path,
+             lidar_model: str = "simple") -> None:
     if not source_path.is_file():
         raise FileNotFoundError(
             "Official G1 source URDF was not found at "
@@ -488,7 +526,7 @@ def generate(source_path: Path, output_path: Path, g1_ws: Path) -> None:
     _freeze_joints(root)
     _ensure_base_link(root)
     _add_camera(root)
-    _add_lidar_and_imu(root)
+    _add_lidar_and_imu(root, lidar_model)
     _add_motion_plugins(root)
     _indent(root)
 
@@ -512,8 +550,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "urdf" / "g1_glide.urdf",
-        help="Generated URDF destination.",
+        default=None,
+        help="Generated URDF destination (default: urdf/g1_glide.urdf, "
+             "or urdf/g1_glide_mid360.urdf with --lidar mid360).",
+    )
+    parser.add_argument(
+        "--lidar",
+        choices=LIDAR_MODELS,
+        default="simple",
+        help="simple: 2D scan planes (default); mid360: 3D lidar with the real MID-360 field of view.",
     )
     return parser
 
@@ -522,9 +567,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     g1_ws = args.g1_ws.expanduser().resolve()
     source = (args.source or (g1_ws / SOURCE_RELATIVE_PATH)).expanduser().resolve()
-    output = args.output.expanduser().resolve()
+    urdf_dir = Path(__file__).resolve().parents[1] / "urdf"
+    default_name = "g1_glide_mid360.urdf" if args.lidar == "mid360" else "g1_glide.urdf"
+    output = (args.output or urdf_dir / default_name).expanduser().resolve()
     try:
-        generate(source, output, g1_ws)
+        generate(source, output, g1_ws, args.lidar)
     except (FileNotFoundError, ValueError, OSError) as exc:
         print(f"g1_guide: generation failed: {exc}", file=sys.stderr)
         return 2

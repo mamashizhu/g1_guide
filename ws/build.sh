@@ -12,6 +12,8 @@ ws=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 runtime="${G1_GUIDE_RUNTIME:-$HOME/.local/share/g1-guide-runtime}"
 
 python3 "$ws/src/g1_guide/scripts/make_glide_urdf.py" --g1-ws "$ws"
+# 真机雷达版：MID-360 按真机视场做成 3D 雷达（slam.launch.py lidar:=mid360 使用）
+python3 "$ws/src/g1_guide/scripts/make_glide_urdf.py" --g1-ws "$ws" --lidar mid360
 
 cd -- "$ws"
 colcon --log-base "$runtime/log" build \

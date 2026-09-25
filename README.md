@@ -7,6 +7,8 @@
 ```
 g1_guide/
 ├── PLAN.md                       任务清单与计划
+├── docs/
+│   └── exhibition-hall.md        展馆网格模型与人物模型：导入、烘焙导航地图、布局坐标、排错
 ├── ws/                           ROS2 工作区
 │   ├── build.sh                  构建脚本（生成 URDF + colcon --symlink-install）
 │   └── src/
@@ -14,13 +16,15 @@ g1_guide/
 │       ├── g1_bridge/            Gazebo↔ROS 桥接（C++，可正常退出）
 │       └── g1_guide/             主包
 │           ├── g1_guide/         节点与算法
-│           │   ├── exhibition_world.py   按 config 生成展馆 SDF
+│           │   ├── exhibition_world.py   按 config 生成展馆 SDF（导入展馆网格 + 人物）
+│           │   ├── scene_config.py        场景配置加载与占地几何（世界与导航共用）
 │           │   ├── exhibition_nav.py     导航节点（A* + 雷达避障 + 路径跟踪）
 │           │   ├── nav_grid.py           占据栅格与 A*
 │           │   ├── nav_control.py        速度指令与安全停车
 │           │   ├── nav_keyboard.py       数字键 1–6 选展位
 │           │   ├── slam_explore.py       SLAM 自动巡航建图、保存地图
 │           │   ├── slam_map.py           地图读写（pgm/yaml）与墙体偏差检查
+│           │   ├── mid360_to_scan.py     真机雷达版：MID-360 点云压成 2D /nav_scan
 │           │   ├── g1_teleop.py          WASD 键盘遥控
 │           │   ├── lowlevel_*.py, joint_targets.py   低阶关节力矩 PD 控制
 │           │   ├── sensor_dashboard.py, sensor_metrics.py   传感器面板
@@ -57,7 +61,8 @@ bash "/mnt/d/g1_guide/ws/build.sh"
 | 导航状态 | `ros2 topic echo /nav/status` |
 | 放障碍 / 删障碍 | `bash /mnt/d/g1_guide/tools/spawn_box.sh box1 0 -2.5` / `remove_box.sh box1` |
 | SLAM 建图（手动开车，简单展馆） | `ros2 launch g1_guide slam.launch.py rviz:=true`，再开 `nav_keyboard` 或 `g1_teleop` |
-| SLAM 自动巡航建图并保存 | `ros2 launch g1_guide slam.launch.py explore:=true rviz:=true` → 地图存到 `maps/` |
+| SLAM 自动巡航建图并保存（简化雷达版） | `ros2 launch g1_guide slam.launch.py explore:=true rviz:=true` → `maps/exhibition_map.*` |
+| SLAM 自动巡航建图并保存（真机雷达版） | `ros2 launch g1_guide slam.launch.py lidar:=mid360 explore:=true rviz:=true` → `maps/exhibition_map_mid360.*` |
 | 手动保存当前地图 | `ros2 run nav2_map_server map_saver_cli -f /mnt/d/g1_guide/maps/my_map` |
 | 检查地图墙体偏差 | `ros2 run g1_guide slam_map_check /mnt/d/g1_guide/maps/exhibition_map.yaml --scene <场景json>` |
 | 低阶控制（骨盆固定） | `ros2 launch g1_guide lowlevel.launch.py` |
@@ -68,3 +73,15 @@ bash "/mnt/d/g1_guide/ws/build.sh"
 ```bash
 cd /mnt/d/g1_guide/ws/src/g1_guide && python3 -m pytest -q -p no:cacheprovider test
 ```
+
+## 两个雷达版本（SLAM）
+
+| | 简化雷达版 `lidar:=simple`（默认） | 真机雷达版 `lidar:=mid360` |
+|---|---|---|
+| 模型文件 | `urdf/g1_glide.urdf` | `urdf/g1_glide_mid360.urdf`（`build.sh` 同时生成） |
+| MID-360 位置 | 真机位置（头部倒装） | 真机位置（头部倒装） |
+| MID-360 建模 | 单线 2D，量程 8m | 3D：360°×（−7°～52°），量程 40m，仿真 30 线 |
+| `/nav_scan` 来源 | 额外加的水平雷达 `nav_lidar_link`（真机没有） | `mid360_to_scan` 从点云取离地 0.08～2m 的点压成 2D |
+| 矮障碍（长椅、花盆） | 扫不到 | 能建进地图、能避障 |
+| 仿真负担 | 小 | 点云约 1 万点/帧，8Hz |
+

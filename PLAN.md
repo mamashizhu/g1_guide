@@ -23,7 +23,7 @@
 | WSL NAT 模式不镜像 localhost 代理 | ⚠️ | 需要代理的网络请求放在 Windows 端发 |
 
 ### 已有底座（可以直接复用）
-- 展馆世界：4 张海报、2 个立体展品、墙、长椅、花盆（`config/exhibition.json`）
+- 展馆世界：导入 Fuel 的真实博物馆网格 `iscas_museum`（22.5×20.5m），4 张海报贴真实墙面、2 个立体展品、3 个静态参观者、2 个行走 actor（`config/exhibition.json`）。原版 16×12m 长方体房间保留在 `config/exhibition_simple.json`，SLAM 仍用它。详见 [docs/exhibition-hall.md](docs/exhibition-hall.md)
 - 平移代理：VelocityControl 加关闭重力，机器人平移不倒
 - 低阶控制：固定骨盆的 29 关节力矩 PD 控制，以及手臂指向（在单独的 `lowlevel` 模型里）
 - 传感器：RGB-D、2D 雷达 `/scan` 和 `/nav_scan`、IMU、odom，另有传感器面板
@@ -37,8 +37,9 @@
 
 | 课程要求 | 状态 | 现有实现 | 证据 |
 |---------|------|---------|------|
-| 虚拟环境（墙、障碍物） | ✅ | `exhibition_world.py` 读取 `exhibition.json` 生成展馆：16×12m，四面墙，2 张长椅和 2 个花盆作障碍 | `docs/evidence/f01/`（俯视图和 6 张展品图） |
-| 展品 ≥4 张、实物 ≥2 个 | ✅ | E01–E04 四张海报（`scripts/generate_exhibit_assets.py` 生成图片），E05 书籍、E06 地球仪两个立体展品 | 同上 |
+| 虚拟环境（墙、障碍物） | ✅（2026-09-25 换成导入网格，画面待用户肉眼确认） | `exhibition_world.py` 导入 `iscas_museum` 网格（22.5×20.5m，层高 4m）；该网格只有墙，地面仍由代码生成；墙体烘焙成 320 个矩形供 `nav_grid` 使用，与网格可达区域逐格一致（泄漏 0） | `docs/exhibition-hall.md`；旧证据 `docs/evidence/f01/` 对应已弃用的 16×12m 房间 |
+| 展品 ≥4 张、实物 ≥2 个 | ✅ | E01–E04 四张海报（`scripts/generate_exhibit_assets.py` 生成图片）贴在真实墙面（北墙 2、西墙 1、南墙 1），E05 书籍、E06 地球仪两个立体展品 | 同上 |
+| 环境里有人（加分项） | ✅ 代码完成，画面待确认 | 3 个带碰撞的静态参观者（进导航栅格，雷达可见）+ 2 个骨骼动画行走 actor（相机可见，**雷达不可见**，Gazebo actor 无碰撞体） | `docs/exhibition-hall.md` |
 | 低阶控制 | ✅ | `make_controlled_urdf.py` 生成完整 29 关节模型（固定骨盆支撑），通过 ros2_control 做力矩 PD；配套 `joint_targets.py` 限速与失联保护，`render_lowlevel_report.py` 画曲线 | `docs/evidence/f02/`、`docs/reviews/f02-review.md` |
 | 机器人在环境内移动 | ✅ | `make_glide_urdf.py` 平移模型（VelocityControl + 关闭重力），`g1_teleop.py` 键盘遥控 | 重力修复后你已手动确认不倒 |
 | 多传感器获取与展示 | ✅ | RGB-D 相机、雷达 `/scan`（360 线）、导航雷达 `/nav_scan`、IMU、odom；`sensor_dashboard.py` 面板，`g1_camera_viewer.py` 相机查看，`frame_sync.py` 时间戳配对 | `docs/evidence/f03/`、`docs/reviews/f03-review.md` |
@@ -47,7 +48,7 @@
 | 避障 | 🟡 | `nav_grid.py` 用实时雷达点更新栅格并重规划；`nav_control.py` 前方 < 0.8m 停车，速度有上限 | 同上；之前失败原因是机身俯仰导致地面回波被当成障碍 |
 | 机器人姿态 | 🟡 | `nav_control.py` 先转向再前进，到站后对准展品朝向 | 未验收 |
 | 手指向展品 | ❌ 需重做（2026-09-25 用户实测 `/g1_pointing/select` 控制异常，旧实现作废，由 M2.3 重新实现） | `pointing_kinematics.py` 手臂 IK，`pointing_node.py` 左右指向 | `docs/evidence/f02b/`：误差约 5°。**只在低阶模型（骨盆固定）里做过**，展馆平移模型的手臂仍是焊死的 |
-| SLAM 建图（亮点） | 🟡 简单展馆已建图，墙体合格；矮障碍扫不到（见 M2.1） | `slam.launch.py`（slam_toolbox online_async）+ `slam_explore.py` 自动巡航 + `slam_map.py` 偏差检查 | `maps/exhibition_map*`（地图、叠加图、报告） |
+| SLAM 建图（亮点） | ✅ 简单展馆，两个雷达版本都已建图（见 M2.1） | `slam.launch.py lidar:=simple/mid360`（slam_toolbox online_async）+ `slam_explore.py` 自动巡航 + `slam_map.py` 偏差检查 + `mid360_to_scan.py` 点云压 2D | `maps/exhibition_map*`、`maps/exhibition_map_mid360*` |
 
 **任务二：语音对话**：全部 ❌，没有任何代码。
 
@@ -145,8 +146,8 @@ g1_guide/
 
 | # | 任务 | 方案 | 验收 | 执行 |
 |---|------|------|------|------|
-| 🟡 M2.1 | **SLAM 建图** | 运行 slam_toolbox 的 online_async 模式，输入 `/nav_scan` 和 `/odom`。用预设巡航路线自动走遍展馆，结束后用 map_saver 保存 `map.pgm/yaml` | 地图和真实布局叠加对比，墙体偏差 < 0.2m | 🤖 |
-| 🟡 M2.1 结果 | 2026-09-25 简单展馆（`exhibition_simple.json`）实测 | `ros2 launch g1_guide slam.launch.py explore:=true rviz:=true`：6 个展位全部到达，约 2.5 分钟，地图自动存到 `maps/` | ✅ 墙体偏差 p95 = 0.03m、最大 0.07m，100% 墙格在 0.2m 内。❌ 雷达装在 1.32m 高，长椅（0.65m）、书展台（0.95m）、花盆（1.05m）扫不到；房间中部有大片未知区（雷达量程 8m，远墙超出量程的射线不会被标成空地）。待定：降低/新增一个低位雷达，或把量程加到 12m | 🤖 |
+| ✅ M2.1 | **SLAM 建图** | 运行 slam_toolbox 的 online_async 模式，输入 `/nav_scan` 和 `/odom`。用预设巡航路线自动走遍展馆，结束后用 map_saver 保存 `map.pgm/yaml` | 地图和真实布局叠加对比，墙体偏差 < 0.2m | 🤖 |
+| ✅ M2.1 结果 | 2026-09-25 简单展馆（`exhibition_simple.json`）实测，两个雷达版本 | **简化雷达版** `lidar:=simple`（默认）：虚构的水平单线雷达，8m。墙体 p95 = 0.03m 合格，但长椅、书展台、花盆低于 1.32m 扫描平面，没有进地图，中部还有未知区。**真机雷达版** `lidar:=mid360`：MID-360 按真机规格做成倒装 3D 雷达（360°×−7°～52°，40m，30 线仿真），`mid360_to_scan` 取离地 0.08～2m 的点压成 `/nav_scan`，过滤 0.5m 内的机器人自身回波。6 站全部到达，墙体 p95 = 0.06m、99.7% 在 0.2m 内，**14 个物体全部进地图**，没有未知区 | 两版都走完 6 站 | 🤖 |
 | M2.2 | 用 SLAM 地图导航 | nav_grid 增加"从 pgm 加载"模式，替换掉从配置直接生成的栅格 | 用地图模式跑完 1–6 号展位 | 🤖 |
 | M2.3 | **讲解时的手臂动作** | `make_glide_urdf.py` 中只把左右臂 14 个关节改为 revolute，并关闭手臂连杆的重力；每个关节配一个 gz `JointPositionController`。`gesture_player` 用关键帧加插值实现 `point/open_palm/wave/explain_loop/home`，每次在关键帧上叠加 ±5° 随机扰动，避免动作呆板。指向角度复用 `pointing_kinematics.py` 的 IK 计算 | 到站后能指向展品，末端指向误差 < 10°；平移过程中手臂不乱甩 | 🤖 |
 | M2.4 | 路径与姿态可视化 | 在 RViz 中显示规划路径（`nav_msgs/Path`）、机器人朝向、代价地图 | 截图或录屏 | 🤖 |
@@ -264,3 +265,4 @@ g1_guide/
 | 2026-09-25 | 已验证代码迁移到 `claude_course/ws`，包名改为 g1_guide，旧目录弃用 | 见 git log |
 | 2026-09-25 | 项目整体搬到 `D:\g1_guide`，去掉写死路径，新建独立仓库 | 见 git log |
 | 2026-09-25 | M2.1 SLAM 建图（简单展馆）：slam_toolbox + 自动巡航 + 地图偏差检查，墙体合格，矮障碍待解决 | 见 git log |
+| 2026-09-25 | M2.1 新增真机雷达版（MID-360 3D，按真机规格），矮障碍全部建进地图；简化雷达版保留 | 见 git log |

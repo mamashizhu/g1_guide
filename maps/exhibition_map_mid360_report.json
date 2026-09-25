@@ -1,0 +1,30 @@
+{
+  "occupied_cells": 2687,
+  "free_area_m2": 174.29,
+  "mean_m": 0.0231,
+  "p95_m": 0.0597,
+  "max_m": 0.2097,
+  "beyond_1m": 0,
+  "within_tolerance_ratio": 0.997,
+  "tolerance_m": 0.2,
+  "pass": true,
+  "objects_detected": [
+    "wall_north",
+    "wall_south",
+    "wall_east",
+    "wall_west",
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E05",
+    "E06",
+    "bench_west",
+    "bench_east",
+    "planter_west",
+    "planter_east"
+  ],
+  "objects_missed": [],
+  "map": "exhibition_map_mid360.yaml",
+  "overlay": "exhibition_map_mid360_overlay.png"
+}

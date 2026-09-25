@@ -23,7 +23,7 @@ Visualization Manager:
       Color Scheme: map
       Alpha: 0.8
     - Class: rviz_default_plugins/LaserScan
-      Name: Nav Scan
+      Name: Nav Scan (2D)
       Enabled: true
       Topic:
         Value: /nav_scan
@@ -33,6 +33,17 @@ Visualization Manager:
       Color: 255; 40; 40
       Style: Points
       Size (Pixels): 4
+    - Class: rviz_default_plugins/PointCloud2
+      Name: MID-360 Cloud (mid360)
+      Enabled: false
+      Topic:
+        Value: /mid360/points
+        Reliability Policy: Best Effort
+      Size (m): 0.03
+      Color Transformer: AxisColor
+      Axis: Z
+      Style: Points
+      Size (Pixels): 2
     - Class: rviz_default_plugins/RobotModel
       Name: Robot
       Enabled: true

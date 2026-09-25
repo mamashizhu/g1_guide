@@ -43,6 +43,7 @@ setup(
             "nav_keyboard = g1_guide.nav_keyboard:main",
             "slam_explore = g1_guide.slam_explore:main",
             "slam_map_check = g1_guide.slam_map:main",
+            "mid360_to_scan = g1_guide.mid360_to_scan:main",
         ],
     },
 )

@@ -1,0 +1,8 @@
+# 真机雷达版额外桥接：MID-360 3D 点云（gz 3D 雷达把点云发在 <topic>/points）。
+# 由 slam.launch.py lidar:=mid360 加载，与 bridge.yaml 同时使用。
+- ros_topic_name: /mid360/points
+  gz_topic_name: /mid360/points
+  ros_type_name: sensor_msgs/msg/PointCloud2
+  gz_type_name: gz.msgs.PointCloudPacked
+  direction: GZ_TO_ROS
+  frame_id: mid360_link

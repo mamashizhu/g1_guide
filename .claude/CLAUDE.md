@@ -68,10 +68,19 @@ bash /mnt/d/g1_guide/ws/build.sh
 - 低阶模型（`make_controlled_urdf.py`）：29 个关节，骨盆固定，ros2_control 做力矩 PD。
 - 旧的手臂指向实现用户实测不可用，已舍弃，需要重做（PLAN M2.3）。
 
+## 展馆模型要点
+
+- 展馆是导入的 Fuel 网格 `OpenRobotics/iscas_museum`（已缓存在 `~/.gz/fuel`，离线可用）。**它只有墙，没有地面也没有屋顶**，地面仍由 `exhibition_world.py` 生成。
+- `nav_grid` 按矩形规划，吃不了网格。墙体已离线烘焙成 `config/hall_nav_obstacles.json`（320 个矩形）。**改了展馆模型必须重新烘焙并验证**，流程见 `docs/exhibition-hall.md`。
+- 改布局坐标不要靠读图估，用 `tools/hall/check_layout.py` 对网格实测，再用 `tools/hall/check_tour.py` 确认 6 个展位仍可达。
+- 行走的 actor 没有碰撞体，雷达看不见，只有摄像头能拍到；参与避障的是 3 个静态参观者。
+
 ## SLAM 要点
 
 - `slam.launch.py` 默认用 `config/exhibition_simple.json`（原版 16×12m 简单展馆）；导入的大展馆用 `scene_config:=.../exhibition.json`。
 - slam_toolbox 输入 `/nav_scan`，坐标系 `map → odom → base_link`；odom 来自 Gazebo OdometryPublisher，与世界坐标重合，所以地图坐标 = 世界坐标，可以直接和布局对比。
+- 两个雷达版本：`lidar:=simple`（默认，虚构水平 2D 雷达）和 `lidar:=mid360`（真机规格 3D MID-360，`mid360_to_scan` 压成 `/nav_scan`）。两版都要保留，不要删简化版。
+- MID-360 会扫到机器人自己的肩膀和手臂（0.3～0.4m），`mid360_to_scan` 的 `self_radius` 必须 ≥ 0.5，否则导航一直报 blocked。
 - 依赖 `ros-lyrical-slam-toolbox`、`ros-lyrical-nav2-map-server`（已 apt 安装）。
 - 与其他会话同时跑仿真时，用 `ROS_DOMAIN_ID` 和 `GZ_PARTITION` 隔离，避免话题串线。
 
@@ -93,3 +102,4 @@ bash /mnt/d/g1_guide/ws/build.sh
 | Gazebo 卡顿 | GPU 路径未启用 | 验证：`glxinfo \| grep renderer` |
 | 改了代码仿真没变化 | 新增了文件或改了 URDF 生成器，但没重新构建 | 运行 `build.sh` |
 | 搬文件夹后启动报找不到文件 | 软链接指向旧位置 | 删掉 `~/.local/share/g1-guide-runtime` 后重新运行 `build.sh` |
+| Gazebo 黑屏、Entity Tree 空、报 `SceneBroadcaster: Timed out waiting for state` | 物理线程卡在加载期。已知诱因：`<actor><skin><filename>` 的 Fuel 路径带空格（如 `male%20visitor`），网格解析器不报错直接挂住 | 换路径不含空格的模型。`validate_layout` 已拦截 `skin_uri` 里的空格；定位其他诱因用 `tools/hall/bisect_world.py` |
