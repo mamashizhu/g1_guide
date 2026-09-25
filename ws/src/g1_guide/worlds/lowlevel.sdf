@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="lowlevel">
+    <physics name="fixed_step" type="ignored"><max_step_size>0.001</max_step_size><real_time_factor>1</real_time_factor></physics>
+    <gravity>0 0 -9.81</gravity>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
+    <scene><ambient>0.7 0.7 0.7 1</ambient><background>0.15 0.17 0.2 1</background></scene>
+    <light name="sun" type="directional"><pose>0 0 8 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><direction>-0.3 0.2 -1</direction></light>
+    <model name="floor"><static>true</static><link name="floor">
+      <collision name="floor"><geometry><box><size>8 8 0.1</size></box></geometry></collision>
+      <visual name="floor_visual"><geometry><box><size>8 8 0.1</size></box></geometry><material><diffuse>0.4 0.4 0.45 1</diffuse></material></visual>
+    </link></model>
+    <!-- Visible support indicator only; the actual constraint is world->pelvis. -->
+    <model name="support_indicator"><static>true</static><pose>-0.5 0 0.675 0 0 0</pose><link name="stand">
+      <visual name="stand"><geometry><box><size>0.1 0.25 1.25</size></box></geometry><material><diffuse>0.95 0.6 0.1 1</diffuse></material></visual>
+    </link></model>
+    <!-- F02b pointing targets: centers match the explicit world-frame target table. -->
+    <model name="left_point_target"><static>true</static><pose>1.5 0.7 0 0 0 0</pose><link name="exhibit">
+      <collision name="stand"><pose>0 0 0.66 0 0 0</pose><geometry><box><size>0.24 0.24 1.32</size></box></geometry></collision>
+      <visual name="stand_visual"><pose>0 0 0.66 0 0 0</pose><geometry><box><size>0.24 0.24 1.32</size></box></geometry><material><diffuse>0.12 0.12 0.16 1</diffuse></material></visual>
+      <collision name="red_sphere"><pose>0 0 1.45 0 0 0</pose><geometry><sphere><radius>0.12</radius></sphere></geometry></collision>
+      <visual name="red_sphere_visual"><pose>0 0 1.45 0 0 0</pose><geometry><sphere><radius>0.12</radius></sphere></geometry><material><diffuse>0.9 0.12 0.08 1</diffuse><ambient>0.9 0.12 0.08 1</ambient></material></visual>
+    </link></model>
+    <model name="right_point_target"><static>true</static><pose>1.5 -0.7 0 0 0 0</pose><link name="exhibit">
+      <collision name="stand"><pose>0 0 0.66 0 0 0</pose><geometry><box><size>0.24 0.24 1.32</size></box></geometry></collision>
+      <visual name="stand_visual"><pose>0 0 0.66 0 0 0</pose><geometry><box><size>0.24 0.24 1.32</size></box></geometry><material><diffuse>0.12 0.12 0.16 1</diffuse></material></visual>
+      <collision name="blue_cube"><pose>0 0 1.45 0 0 0</pose><geometry><box><size>0.24 0.24 0.24</size></box></geometry></collision>
+      <visual name="blue_cube_visual"><pose>0 0 1.45 0 0 0</pose><geometry><box><size>0.24 0.24 0.24</size></box></geometry><material><diffuse>0.08 0.3 0.9 1</diffuse><ambient>0.08 0.3 0.9 1</ambient></material></visual>
+    </link></model>
+    <model name="lowlevel_observer"><static>true</static><pose>3.5 0 2.1 0 0.2 3.14159265</pose><link name="camera">
+      <sensor name="overview" type="camera"><always_on>true</always_on><update_rate>2</update_rate><topic>/lowlevel/overview</topic>
+        <camera><horizontal_fov>1.2</horizontal_fov><image><width>640</width><height>480</height><format>R8G8B8</format></image><clip><near>0.1</near><far>15</far></clip></camera>
+      </sensor>
+    </link></model>
+  </world>
+</sdf>

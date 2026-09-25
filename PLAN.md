@@ -5,7 +5,7 @@
 本计划不沿用 `docs/agent-workboard.md` 的旧清单，按课程要求重新拆分。原则：
 1. **先做必做项，再做亮点**，每一项都要在本机上真实跑通。
 2. 只做仿真与交互，**不接真机**。
-3. 新内容全部放在 `claude_course/` 下；`g1_ws/src/g1_course` 只作为底座使用，不再往里加东西。
+3. `claude_course/` 是唯一工作目录。已验证的代码已迁入 `ws/src/g1_guide`（2026-09-25），旧的 `g1_ws/` 弃用。
 4. 每项任务标注执行方：🤖 = Claude 能在本机独立完成并验证；👤 = 需要你本人操作。
 
 ---
@@ -53,7 +53,9 @@
 
 **任务三：视觉与综合**：只有底层数据。相机画面已能取到（`/camera/image`、深度、点云），但识别、人脸、手势、网络控制都是 ❌。
 
-**测试**：`g1_course/test/` 下共 21 个测试文件，覆盖模型生成、展馆、低阶、指向、传感器、导航纯逻辑。
+**测试**：迁移后 `g1_guide/test/` 共 15 个测试文件，142 项全部通过（指向和旧验收脚本的测试已随代码一起舍弃）。
+
+**迁移说明**：下表的「现有实现」文件名指旧包；迁移后包名为 `g1_guide`，文件名不变。
 
 **结论**：任务一只差「导航与避障在仿真中验收」和「展馆模型里的手臂动作」；任务二、三从零开始。下面的清单按这个结论排：M1 只做收尾，不重写已有内容。
 
@@ -99,9 +101,9 @@
 ```
 claude_course/
 ├── PLAN.md                  ← 本文件
-├── ws/src/g1_guide/         ROS2 包（依赖 g1_course，叠加在其安装目录上）
+├── ws/src/g1_guide/         ROS2 主包（已迁入全部已验证代码，见 README.md）
 │   ├── g1_guide/            guide_manager、gesture_player、exhibit_detector …
-│   ├── scripts/make_guide_urdf.py   在 glide URDF 基础上放开手臂关节（不改原生成器）
+│   ├── scripts/make_glide_urdf.py   平移模型生成器（M2.3 在这里放开手臂关节）
 │   ├── worlds/ config/ launch/ test/
 │   └── build.sh             colcon --symlink-install，安装到独立目录
 ├── voice/                   Windows 端语音对话系统（纯 Python）
@@ -123,11 +125,11 @@ claude_course/
 
 | # | 任务 | 方案 | 验收 | 执行 |
 |---|------|------|------|------|
-| M0.1 | 提交现有未提交修改 | 先把重力修复、bridge.yaml 等跑一遍测试，再单独提交 | `pytest` 通过，git 干净 | 🤖 |
+| M0.1 | ~~提交现有未提交修改~~ ✅ 改为迁移 | 已验证代码迁入 `claude_course/ws`，包名改为 g1_guide | 142 项测试通过，导航和低阶控制的 headless 冒烟测试通过 | 🤖 已完成 |
 | M0.2 | WSL 装依赖 | `apt install python3-venv python3-pip ros-lyrical-slam-toolbox ros-lyrical-nav2-map-server ros-lyrical-rosbridge-server`；建 venv 时加 `--system-site-packages`，以便复用 rclpy | `ros2 pkg list` 中能看到这几个包 | 🤖（通过 `wsl -u root`，若要密码则 👤） |
 | M0.3 | Windows 端建 venv | `D:\python\python.exe -m venv claude_course\voice\.venv`，安装 roslibpy、sounddevice、numpy、PySide6 | `import` 全部成功 | 🤖 |
 | M0.4 | 打通 Windows↔WSL | WSL 启动 rosbridge，Windows 端用 roslibpy 发布 `/guide/goto`，WSL 端 `ros2 topic echo` 能收到 | 往返延迟 < 100ms | 🤖 |
-| M0.5 | 新建 `g1_guide` 包和构建脚本 | 使用 `--symlink-install`，叠加在 g1-course-runtime 之上 | `ros2 launch g1_guide …` 可以启动 | 🤖 |
+| M0.5 | ✅ 新建 `g1_guide` 包和构建脚本 | `ws/build.sh`，使用 `--symlink-install`，独立安装到 g1-guide-runtime | `ros2 launch g1_guide …` 可以启动 | 🤖 |
 
 ### 阶段 M1：任务一 必做项收尾（第 1–2 周）
 
@@ -145,7 +147,7 @@ claude_course/
 |---|------|------|------|------|
 | M2.1 | **SLAM 建图** | 运行 slam_toolbox 的 online_async 模式，输入 `/nav_scan` 和 `/odom`。用预设巡航路线自动走遍展馆，结束后用 map_saver 保存 `map.pgm/yaml` | 地图和真实布局叠加对比，墙体偏差 < 0.2m | 🤖 |
 | M2.2 | 用 SLAM 地图导航 | nav_grid 增加"从 pgm 加载"模式，替换掉从配置直接生成的栅格 | 用地图模式跑完 1–6 号展位 | 🤖 |
-| M2.3 | **讲解时的手臂动作** | `make_guide_urdf.py` 基于 glide URDF，只把左右臂 14 个关节改为 revolute，并关闭手臂连杆的重力；每个关节配一个 gz `JointPositionController`。`gesture_player` 用关键帧加插值实现 `point/open_palm/wave/explain_loop/home`，每次在关键帧上叠加 ±5° 随机扰动，避免动作呆板。指向角度复用 `pointing_kinematics.py` 的 IK 计算 | 到站后能指向展品，末端指向误差 < 10°；平移过程中手臂不乱甩 | 🤖 |
+| M2.3 | **讲解时的手臂动作** | `make_glide_urdf.py` 中只把左右臂 14 个关节改为 revolute，并关闭手臂连杆的重力；每个关节配一个 gz `JointPositionController`。`gesture_player` 用关键帧加插值实现 `point/open_palm/wave/explain_loop/home`，每次在关键帧上叠加 ±5° 随机扰动，避免动作呆板。指向角度复用 `pointing_kinematics.py` 的 IK 计算 | 到站后能指向展品，末端指向误差 < 10°；平移过程中手臂不乱甩 | 🤖 |
 | M2.4 | 路径与姿态可视化 | 在 RViz 中显示规划路径（`nav_msgs/Path`）、机器人朝向、代价地图 | 截图或录屏 | 🤖 |
 | M2.5 | （可选）MuJoCo 真步行 | 使用 `unitree_rl_gym` 自带的 G1 预训练策略，配合 `deploy_mujoco.py`，在 Windows 上 pip 安装 mujoco 和 torch(CPU) 即可运行，用键盘控制速度实现双足行走。作为「步行可行性」的独立演示，**不并入 Gazebo 主线** | 能稳定走 10 秒以上，并能转向 | 🤖（需要从 GitHub 下载） |
 
@@ -257,3 +259,5 @@ claude_course/
 | 日期 | 完成 | 提交 |
 |------|------|------|
 | 2026-09-25 | 创建分支 `claude/guide-robot` 和本计划 | — |
+| 2026-09-25 | 用户可视化验证：导航、避障、低阶控制、传感器均通过；指向不可用，舍弃 | — |
+| 2026-09-25 | 已验证代码迁移到 `claude_course/ws`，包名改为 g1_guide，旧目录弃用 | 见 git log |

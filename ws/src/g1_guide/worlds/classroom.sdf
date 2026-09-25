@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="classroom">
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre</render_engine>
+    </plugin>
+
+    <scene>
+      <ambient>0.35 0.35 0.35 1</ambient>
+      <background>0.08 0.08 0.10 1</background>
+      <shadows>false</shadows>
+    </scene>
+
+    <light name="classroom_sun" type="directional">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 8 0.4 0.2 -0.6</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.3 0.1 -1</direction>
+    </light>
+
+    <model name="floor">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>12 12 0.10</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>12 12 0.10</size></box></geometry>
+          <material><ambient>0.35 0.35 0.38 1</ambient><diffuse>0.45 0.45 0.48 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_north">
+      <static>true</static><pose>0 6 1.5 0 0 0</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>12 0.10 3</size></box></geometry></collision><visual name="visual"><geometry><box><size>12 0.10 3</size></box></geometry><material><diffuse>0.72 0.72 0.76 1</diffuse></material></visual></link>
+    </model>
+    <model name="wall_south">
+      <static>true</static><pose>0 -6 1.5 0 0 0</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>12 0.10 3</size></box></geometry></collision><visual name="visual"><geometry><box><size>12 0.10 3</size></box></geometry><material><diffuse>0.72 0.72 0.76 1</diffuse></material></visual></link>
+    </model>
+    <model name="wall_east">
+      <static>true</static><pose>6 0 1.5 0 0 0</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>0.10 12 3</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.10 12 3</size></box></geometry><material><diffuse>0.72 0.72 0.76 1</diffuse></material></visual></link>
+    </model>
+    <model name="wall_west">
+      <static>true</static><pose>-6 0 1.5 0 0 0</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>0.10 12 3</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.10 12 3</size></box></geometry><material><diffuse>0.72 0.72 0.76 1</diffuse></material></visual></link>
+    </model>
+
+    <model name="obstacle_red">
+      <static>true</static><pose>2.0 1.5 0.5 0 0 0</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>1.0 1.0 1.0</size></box></geometry></collision><visual name="visual"><geometry><box><size>1.0 1.0 1.0</size></box></geometry><material><ambient>0.55 0.08 0.08 1</ambient><diffuse>0.80 0.12 0.12 1</diffuse></material></visual></link>
+    </model>
+    <model name="obstacle_blue">
+      <static>true</static><pose>-2.0 1.0 0.4 0 0 0.4</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>1.6 0.8 0.8</size></box></geometry></collision><visual name="visual"><geometry><box><size>1.6 0.8 0.8</size></box></geometry><material><ambient>0.08 0.16 0.55 1</ambient><diffuse>0.12 0.28 0.82 1</diffuse></material></visual></link>
+    </model>
+    <model name="obstacle_green">
+      <static>true</static><pose>2.2 -2.0 0.6 0 0 0</pose>
+      <link name="link"><collision name="collision"><geometry><cylinder><radius>0.55</radius><length>1.2</length></cylinder></geometry></collision><visual name="visual"><geometry><cylinder><radius>0.55</radius><length>1.2</length></cylinder></geometry><material><ambient>0.08 0.48 0.14 1</ambient><diffuse>0.12 0.72 0.20 1</diffuse></material></visual></link>
+    </model>
+    <model name="obstacle_yellow">
+      <static>true</static><pose>-2.2 -2.0 0.3 0 0 0.2</pose>
+      <link name="link"><collision name="collision"><geometry><box><size>0.8 1.2 0.6</size></box></geometry></collision><visual name="visual"><geometry><box><size>0.8 1.2 0.6</size></box></geometry><material><ambient>0.55 0.42 0.05 1</ambient><diffuse>0.82 0.65 0.08 1</diffuse></material></visual></link>
+    </model>
+  </world>
+</sdf>
