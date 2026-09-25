@@ -107,9 +107,21 @@ SLAM 地图模式的完整流程与真机一致：先建图（`slam.launch.py li
 简化雷达版建的地图里没有长椅、花盆（雷达扫不到），**不要用 `lidar:=simple` 的地图做 SLAM 地图导航**。
 
 ## 工具
+## 换真机时怎么用 SLAM
+
+仿真里日常用布局地图（`exhibition_nav.launch.py`）。真机没有布局文件、也没有精确里程计，按下面的顺序用 SLAM：
+
+1. **建图**：`slam.launch.py lidar:=mid360`。真机上把 Gazebo 和仿真桥接换成 Unitree 的 MID-360 驱动（发布点云）和里程计；`mid360_to_scan` 把点云压成 `/nav_scan`，`slam_toolbox` 建图。开车走遍展馆（`g1_teleop` 或 `nav_keyboard`），用 `map_saver_cli` 或 `slam_explore` 保存地图。
+2. **标注展位**（待做）：真机地图的原点是开始建图的位置，布局文件里的展位坐标不能直接用，需要把机器人开到每个展品前记录位姿。仿真里地图坐标恰好等于世界坐标，所以暂时直接用布局坐标。
+3. **导航**：`slam_nav.launch.py map:=<地图.yaml>`，map_server + AMCL 定位，`exhibition_nav` 在地图上规划、避障。
+4. 地图旁的 `*_meta.json` 记录了建图的展馆，地图和展馆不一致时启动会直接报错。
+
+仿真里验证过的数据：简单展馆 SLAM 建图墙体偏差 p95 0.06m，14 个物体全部建进地图；里程计漂 2.6m 时 AMCL 定位误差平均 0.05m。
+
 
 | 工具 | 用途 |
 |------|------|
 | `python tools/render_map.py maps/<地图>.yaml` | 把 SLAM 地图画成带展品框、展位箭头、米刻度的 PNG（Windows/WSL 均可） |
 | `wsl -u root -e bash tools/run_detached.sh …` | 用系统级 systemd 托管一条 ros2 命令（仍需一条 wsl 连接保持发行版不被关闭，见脚本注释） |
+| `bash tools/mem_probe.sh <秒> <间隔>` | 采样 Gazebo 进程内存并按堆/显卡映射/文件分类，排查内存泄漏 |
 
