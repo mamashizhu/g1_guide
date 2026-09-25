@@ -47,7 +47,7 @@
 | 避障 | 🟡 | `nav_grid.py` 用实时雷达点更新栅格并重规划；`nav_control.py` 前方 < 0.8m 停车，速度有上限 | 同上；之前失败原因是机身俯仰导致地面回波被当成障碍 |
 | 机器人姿态 | 🟡 | `nav_control.py` 先转向再前进，到站后对准展品朝向 | 未验收 |
 | 手指向展品 | ❌ 需重做（2026-09-25 用户实测 `/g1_pointing/select` 控制异常，旧实现作废，由 M2.3 重新实现） | `pointing_kinematics.py` 手臂 IK，`pointing_node.py` 左右指向 | `docs/evidence/f02b/`：误差约 5°。**只在低阶模型（骨盆固定）里做过**，展馆平移模型的手臂仍是焊死的 |
-| SLAM 建图（亮点） | ❌ | 无；导航用的是按配置生成的地图，不是建图 | — |
+| SLAM 建图（亮点） | 🟡 简单展馆已建图，墙体合格；矮障碍扫不到（见 M2.1） | `slam.launch.py`（slam_toolbox online_async）+ `slam_explore.py` 自动巡航 + `slam_map.py` 偏差检查 | `maps/exhibition_map*`（地图、叠加图、报告） |
 
 **任务二：语音对话**：全部 ❌，没有任何代码。
 
@@ -145,7 +145,8 @@ g1_guide/
 
 | # | 任务 | 方案 | 验收 | 执行 |
 |---|------|------|------|------|
-| M2.1 | **SLAM 建图** | 运行 slam_toolbox 的 online_async 模式，输入 `/nav_scan` 和 `/odom`。用预设巡航路线自动走遍展馆，结束后用 map_saver 保存 `map.pgm/yaml` | 地图和真实布局叠加对比，墙体偏差 < 0.2m | 🤖 |
+| 🟡 M2.1 | **SLAM 建图** | 运行 slam_toolbox 的 online_async 模式，输入 `/nav_scan` 和 `/odom`。用预设巡航路线自动走遍展馆，结束后用 map_saver 保存 `map.pgm/yaml` | 地图和真实布局叠加对比，墙体偏差 < 0.2m | 🤖 |
+| 🟡 M2.1 结果 | 2026-09-25 简单展馆（`exhibition_simple.json`）实测 | `ros2 launch g1_guide slam.launch.py explore:=true rviz:=true`：6 个展位全部到达，约 2.5 分钟，地图自动存到 `maps/` | ✅ 墙体偏差 p95 = 0.03m、最大 0.07m，100% 墙格在 0.2m 内。❌ 雷达装在 1.32m 高，长椅（0.65m）、书展台（0.95m）、花盆（1.05m）扫不到；房间中部有大片未知区（雷达量程 8m，远墙超出量程的射线不会被标成空地）。待定：降低/新增一个低位雷达，或把量程加到 12m | 🤖 |
 | M2.2 | 用 SLAM 地图导航 | nav_grid 增加"从 pgm 加载"模式，替换掉从配置直接生成的栅格 | 用地图模式跑完 1–6 号展位 | 🤖 |
 | M2.3 | **讲解时的手臂动作** | `make_glide_urdf.py` 中只把左右臂 14 个关节改为 revolute，并关闭手臂连杆的重力；每个关节配一个 gz `JointPositionController`。`gesture_player` 用关键帧加插值实现 `point/open_palm/wave/explain_loop/home`，每次在关键帧上叠加 ±5° 随机扰动，避免动作呆板。指向角度复用 `pointing_kinematics.py` 的 IK 计算 | 到站后能指向展品，末端指向误差 < 10°；平移过程中手臂不乱甩 | 🤖 |
 | M2.4 | 路径与姿态可视化 | 在 RViz 中显示规划路径（`nav_msgs/Path`）、机器人朝向、代价地图 | 截图或录屏 | 🤖 |
@@ -262,3 +263,4 @@ g1_guide/
 | 2026-09-25 | 用户可视化验证：导航、避障、低阶控制、传感器均通过；指向不可用，舍弃 | — |
 | 2026-09-25 | 已验证代码迁移到 `claude_course/ws`，包名改为 g1_guide，旧目录弃用 | 见 git log |
 | 2026-09-25 | 项目整体搬到 `D:\g1_guide`，去掉写死路径，新建独立仓库 | 见 git log |
+| 2026-09-25 | M2.1 SLAM 建图（简单展馆）：slam_toolbox + 自动巡航 + 地图偏差检查，墙体合格，矮障碍待解决 | 见 git log |

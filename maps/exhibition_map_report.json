@@ -1,0 +1,31 @@
+{
+  "occupied_cells": 1354,
+  "free_area_m2": 144.67,
+  "mean_m": 0.0123,
+  "p95_m": 0.0324,
+  "max_m": 0.0679,
+  "beyond_1m": 0,
+  "within_tolerance_ratio": 1.0,
+  "tolerance_m": 0.2,
+  "pass": true,
+  "objects_detected": [
+    "wall_north",
+    "wall_south",
+    "wall_east",
+    "wall_west",
+    "E01",
+    "E02",
+    "E03",
+    "E04",
+    "E06"
+  ],
+  "objects_missed": [
+    "E05",
+    "bench_west",
+    "bench_east",
+    "planter_west",
+    "planter_east"
+  ],
+  "map": "exhibition_map.yaml",
+  "overlay": "exhibition_map_overlay.png"
+}

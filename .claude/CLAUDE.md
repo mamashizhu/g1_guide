@@ -16,6 +16,7 @@ ros2 run g1_guide nav_keyboard                  # 数字键 1–6 选展位
 ros2 run g1_guide g1_teleop                     # WASD
 ros2 run g1_guide sensor_dashboard              # 传感器面板
 ros2 launch g1_guide lowlevel.launch.py         # 低阶关节控制（骨盆固定）
+ros2 launch g1_guide slam.launch.py explore:=true rviz:=true   # SLAM 自动巡航建图，地图存到 maps/
 gz sim                                          # 只开 Gazebo
 ```
 
@@ -66,6 +67,13 @@ bash /mnt/d/g1_guide/ws/build.sh
 - 平移模型（`make_glide_urdf.py`）：所有关节都是 fixed，整个机器人是一个刚体；由 VelocityControl 直接设定速度；base_link **必须关闭重力**，否则会倒或"起飞"。
 - 低阶模型（`make_controlled_urdf.py`）：29 个关节，骨盆固定，ros2_control 做力矩 PD。
 - 旧的手臂指向实现用户实测不可用，已舍弃，需要重做（PLAN M2.3）。
+
+## SLAM 要点
+
+- `slam.launch.py` 默认用 `config/exhibition_simple.json`（原版 16×12m 简单展馆）；导入的大展馆用 `scene_config:=.../exhibition.json`。
+- slam_toolbox 输入 `/nav_scan`，坐标系 `map → odom → base_link`；odom 来自 Gazebo OdometryPublisher，与世界坐标重合，所以地图坐标 = 世界坐标，可以直接和布局对比。
+- 依赖 `ros-lyrical-slam-toolbox`、`ros-lyrical-nav2-map-server`（已 apt 安装）。
+- 与其他会话同时跑仿真时，用 `ROS_DOMAIN_ID` 和 `GZ_PARTITION` 隔离，避免话题串线。
 
 ## 验证原则
 

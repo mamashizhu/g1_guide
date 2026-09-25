@@ -21,6 +21,7 @@ setup(
         (os.path.join("share", package_name, "worlds"), glob("worlds/*.sdf")),
         (os.path.join("share", package_name, "config"), glob("config/*.yaml")),
         (os.path.join("share", package_name, "config"), glob("config/*.json")),
+        (os.path.join("share", package_name, "config"), glob("config/*.rviz")),
         (os.path.join("share", package_name, "assets", "exhibition", "posters"),
          glob("assets/exhibition/posters/*.png")),
         (os.path.join("share", package_name, "urdf"), glob("urdf/*")),
@@ -40,6 +41,8 @@ setup(
             "sensor_dashboard = g1_guide.sensor_dashboard:main",
             "exhibition_nav = g1_guide.exhibition_nav:main",
             "nav_keyboard = g1_guide.nav_keyboard:main",
+            "slam_explore = g1_guide.slam_explore:main",
+            "slam_map_check = g1_guide.slam_map:main",
         ],
     },
 )
