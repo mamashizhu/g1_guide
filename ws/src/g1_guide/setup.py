@@ -44,6 +44,7 @@ setup(
             "slam_explore = g1_guide.slam_explore:main",
             "slam_map_check = g1_guide.slam_map:main",
             "mid360_to_scan = g1_guide.mid360_to_scan:main",
+            "odom_drift = g1_guide.odom_drift:main",
         ],
     },
 )

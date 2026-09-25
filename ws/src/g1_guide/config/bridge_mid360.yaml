@@ -6,3 +6,9 @@
   gz_type_name: gz.msgs.PointCloudPacked
   direction: GZ_TO_ROS
   frame_id: mid360_link
+# 真机雷达版的 Gazebo 真值位姿（不发 TF）；odom_drift 由它生成 /odom 和 odom->base_link。
+- ros_topic_name: /odom_truth
+  gz_topic_name: /odom_truth
+  ros_type_name: nav_msgs/msg/Odometry
+  gz_type_name: gz.msgs.Odometry
+  direction: GZ_TO_ROS

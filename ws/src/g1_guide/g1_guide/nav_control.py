@@ -6,8 +6,9 @@ from dataclasses import dataclass
 import math
 
 
-MAX_LINEAR_SPEED = 0.35
-MAX_ANGULAR_SPEED = 0.8
+# 2026-09-25 raised from 0.35 m/s / 0.8 rad/s; the real G1 walks ~1 m/s.
+MAX_LINEAR_SPEED = 0.6
+MAX_ANGULAR_SPEED = 1.2
 OBSTACLE_STOP_DISTANCE = 0.80
 ARRIVAL_DISTANCE = 0.25
 ARRIVAL_YAW_ERROR = 0.20
@@ -56,6 +57,7 @@ def compute_command(
     forward_clearance: float,
     *,
     final: bool = False,
+    arrival_distance: float = ARRIVAL_DISTANCE,
 ) -> Velocity:
     """Track a waypoint while enforcing speed, obstacle, and arrival limits.
 
@@ -64,6 +66,10 @@ def compute_command(
     entering the goal position tolerance. A short intermediate waypoint stops
     here so the caller can advance its path index; only a final waypoint may
     use the goal direction as a replacement.
+
+    ``arrival_distance`` is the goal position tolerance.  With an estimated
+    pose (AMCL) the true stop error is this plus the localization error, so
+    the SLAM map mode passes a tighter value.
     """
 
     try:
@@ -77,11 +83,14 @@ def compute_command(
             return _zero("invalid")
         if type(final) is not bool:
             return _zero("invalid")
+        if not (math.isfinite(arrival_distance) and arrival_distance > 0.0):
+            return _zero("invalid")
     except (AttributeError, TypeError, ValueError, OverflowError):
         return _zero("invalid")
 
     try:
-        return _compute_validated(pose, waypoint, goal, forward_clearance, final)
+        return _compute_validated(pose, waypoint, goal, forward_clearance, final,
+                                  arrival_distance)
     except (TypeError, ValueError, OverflowError):
         # Finite but extreme values can still overflow during subtraction or
         # angle wrapping. Treat those derived invalid values as unsafe too.
@@ -94,11 +103,12 @@ def _compute_validated(
     goal: Pose2D,
     forward_clearance: float,
     final: bool,
+    arrival_distance: float = ARRIVAL_DISTANCE,
 ) -> Velocity:
     goal_distance = math.hypot(goal.x - pose.x, goal.y - pose.y)
     goal_yaw_error = _wrapped_angle(goal.yaw - pose.yaw)
 
-    if final and goal_distance <= ARRIVAL_DISTANCE and abs(goal_yaw_error) <= ARRIVAL_YAW_ERROR:
+    if final and goal_distance <= arrival_distance and abs(goal_yaw_error) <= ARRIVAL_YAW_ERROR:
         return _zero("arrived")
 
     # Clearance is only known in the forward direction. Stop rotation too:
@@ -106,7 +116,7 @@ def _compute_validated(
     if forward_clearance < OBSTACLE_STOP_DISTANCE:
         return _zero("blocked")
 
-    if final and goal_distance <= ARRIVAL_DISTANCE:
+    if final and goal_distance <= arrival_distance:
         return Velocity(0.0, _bounded_angular(goal_yaw_error), "aligning")
 
     waypoint_distance = math.hypot(waypoint.x - pose.x, waypoint.y - pose.y)
@@ -131,8 +141,9 @@ def _compute_validated(
     if abs(heading_error) > TURN_IN_PLACE_ERROR:
         return Velocity(0.0, angular, "aligning")
 
-    # Linear speed tapers close to the active target; angular correction stays
-    # bounded while moving and is zero when the heading is already exact.
+    # Linear speed tapers only when closing on the goal. Path waypoints are
+    # ~0.2 m apart, so tapering on the waypoint would cap cruising speed near
+    # 0.3 m/s; sharp corners still stop and turn in place above.
     target_distance = math.hypot(target_dx, target_dy)
-    linear = min(MAX_LINEAR_SPEED, target_distance)
+    linear = min(MAX_LINEAR_SPEED, target_distance if final else goal_distance)
     return Velocity(linear, angular, "moving")

@@ -18,6 +18,7 @@ ros2 run g1_guide sensor_dashboard              # 传感器面板
 ros2 launch g1_guide lowlevel.launch.py         # 低阶关节控制（骨盆固定）
 ros2 launch g1_guide slam.launch.py explore:=true rviz:=true   # SLAM 自动巡航建图，地图存到 maps/
 gz sim                                          # 只开 Gazebo
+ros2 launch g1_guide slam_nav.launch.py rviz:=true              # SLAM 地图导航（真机雷达 + 漂移 + AMCL）
 ```
 
 ## 环境说明
@@ -81,13 +82,18 @@ bash /mnt/d/g1_guide/ws/build.sh
 - slam_toolbox 输入 `/nav_scan`，坐标系 `map → odom → base_link`；odom 来自 Gazebo OdometryPublisher，与世界坐标重合，所以地图坐标 = 世界坐标，可以直接和布局对比。
 - 两个雷达版本：`lidar:=simple`（默认，虚构水平 2D 雷达）和 `lidar:=mid360`（真机规格 3D MID-360，`mid360_to_scan` 压成 `/nav_scan`）。两版都要保留，不要删简化版。
 - MID-360 会扫到机器人自己的肩膀和手臂（0.3～0.4m），`mid360_to_scan` 的 `self_radius` 必须 ≥ 0.5，否则导航一直报 blocked。
-- 依赖 `ros-lyrical-slam-toolbox`、`ros-lyrical-nav2-map-server`（已 apt 安装）。
+- **主流程导航用布局模式**（用户决定，SLAM 只作为实验功能保留，不在新展馆建图）。
+- 两种导航模式都保留：布局模式 `exhibition_nav.launch.py`（原版，用户验证过）和 SLAM 地图模式 `slam_nav.launch.py`（`exhibition_nav` 加参数 `map_yaml`、`global_frame:=map`、`arrival_distance:=0.15`）。
+- 真机雷达版的 URDF 不发 odom TF：Gazebo 真值在 `/odom_truth`，`/odom` 和 `odom→base_link` 由 `odom_drift` 节点发布，所以 mid360 模型必须和 `odom_drift` 一起启动（`lidar_variants.lidar_actions` 负责）。
+- 依赖 `ros-lyrical-slam-toolbox`、`ros-lyrical-nav2-map-server`、`ros-lyrical-nav2-amcl`、`ros-lyrical-nav2-lifecycle-manager`（已 apt 安装）。
+- 在 WSL 里跑仿真要让 `wsl` 命令常驻（后台任务），不要 `nohup … &` 后退出，进程会被回收。
 - 与其他会话同时跑仿真时，用 `ROS_DOMAIN_ID` 和 `GZ_PARTITION` 隔离，避免话题串线。
 
 ## 验证原则
 
 - 用户要求**可视化验证**：每完成一项，给出用户能亲眼看到效果的命令和合格标准。
-- headless 模式（`headless:=true`）在本机实时率只有约 0.1，只适合冒烟测试，不能用来判断运动快慢。
+- headless 模式（`headless:=true`）2026-09-25 实测新展馆实时率约 0.43，可以跑自动验收；看效果仍用图形窗口。
+- **Gazebo 渲染内存泄漏（WSL GPU 转译层）**：机器人静止时，新展馆图形窗口约 +21 MB/s、仿真主进程约 +8 MB/s（headless 约 +10 MB/s），简单展馆约 +4 / +1.4 MB/s。WSL 只有 7.5GB，新展馆开窗口约 3 分钟就会被 OOM 杀掉，WSL 服务也可能随之报 `E_UNEXPECTED`。长时间运行用 headless，或分段重启；排查看 `dmesg | grep -i oom`。
 
 ## 渲染配置
 

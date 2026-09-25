@@ -13,8 +13,7 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction,
-                            SetLaunchConfiguration)
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -22,27 +21,17 @@ from launch_ros.actions import Node
 
 
 def _launch(context):
+    from g1_guide.lidar_variants import default_map_name, lidar_actions, shutdown_after
+
     share = Path(get_package_share_directory("g1_guide"))
     slam_share = Path(get_package_share_directory("slam_toolbox"))
     scene_config = LaunchConfiguration("scene_config")
     lidar = LaunchConfiguration("lidar").perform(context)
-    if lidar not in ("simple", "mid360"):
-        raise RuntimeError(f"lidar must be simple or mid360, got {lidar!r}")
     real = lidar == "mid360"
-    map_name = LaunchConfiguration("map_name").perform(context) or (
-        "exhibition_map_mid360" if real else "exhibition_map")
-    actions = []
-    if real:
-        # g1_sim.launch.py (included below) reads model_file from the context.
-        actions += [
-            SetLaunchConfiguration("model_file", str(share / "urdf/g1_glide_mid360.urdf")),
-            Node(package="g1_bridge", executable="managed_bridge", name="mid360_bridge",
-                 parameters=[{"config_file": str(share / "config/bridge_mid360.yaml")}],
-                 output="screen"),
-            Node(package="g1_guide", executable="mid360_to_scan", name="mid360_to_scan",
-                 output="screen",
-                 parameters=[{"scene_config": scene_config, "use_sim_time": True}]),
-        ]
+    map_name = LaunchConfiguration("map_name").perform(context) or default_map_name(
+        scene_config.perform(context), lidar)
+    drift = LaunchConfiguration("odom_drift").perform(context).lower() == "true"
+    actions = lidar_actions(share, lidar, scene_config, drift)
     actions += [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(str(share / "launch/exhibition_nav.launch.py")),
@@ -60,13 +49,15 @@ def _launch(context):
              arguments=["-d", str(share / "config/slam.rviz")],
              parameters=[{"use_sim_time": True}],
              condition=IfCondition(LaunchConfiguration("rviz"))),
-        Node(package="g1_guide", executable="slam_explore", name="slam_explore", output="screen",
-             parameters=[{"scene_config": scene_config, "use_sim_time": True,
-                          "order": LaunchConfiguration("order"),
-                          "output_dir": LaunchConfiguration("output_dir"),
-                          "map_name": map_name}],
-             condition=IfCondition(LaunchConfiguration("explore"))),
     ]
+    if LaunchConfiguration("explore").perform(context).lower() == "true":
+        # Saving the map ends the launch.
+        actions += shutdown_after(Node(
+            package="g1_guide", executable="slam_explore", name="slam_explore", output="screen",
+            parameters=[{"scene_config": scene_config, "use_sim_time": True,
+                         "order": LaunchConfiguration("order"),
+                         "output_dir": LaunchConfiguration("output_dir"),
+                         "map_name": map_name, "lidar": lidar}]))
     return actions
 
 
@@ -77,6 +68,8 @@ def generate_launch_description():
         DeclareLaunchArgument("scene_config", default_value=str(share / "config/exhibition_simple.json")),
         DeclareLaunchArgument("lidar", default_value="simple",
                               description="simple = 简化雷达版, mid360 = 真机雷达版"),
+        DeclareLaunchArgument("odom_drift", default_value="false",
+                              description="mid360 only: simulate leg-odometry drift"),
         DeclareLaunchArgument("headless", default_value="false"),
         DeclareLaunchArgument("rviz", default_value="false"),
         DeclareLaunchArgument("explore", default_value="false"),
@@ -85,6 +78,6 @@ def generate_launch_description():
         DeclareLaunchArgument("output_dir", default_value="",
                               description="Where to save the map; empty = <project>/maps"),
         DeclareLaunchArgument("map_name", default_value="",
-                              description="Map file name; empty = exhibition_map[_mid360]"),
+                              description="Map file name; empty = <scene stem>_map[_mid360]"),
         OpaqueFunction(function=_launch),
     ])

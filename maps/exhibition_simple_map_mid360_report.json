@@ -1,11 +1,11 @@
 {
-  "occupied_cells": 1354,
-  "free_area_m2": 144.67,
-  "mean_m": 0.0123,
-  "p95_m": 0.0324,
-  "max_m": 0.0679,
+  "occupied_cells": 2687,
+  "free_area_m2": 174.29,
+  "mean_m": 0.0231,
+  "p95_m": 0.0597,
+  "max_m": 0.2097,
   "beyond_1m": 0,
-  "within_tolerance_ratio": 1.0,
+  "within_tolerance_ratio": 0.997,
   "tolerance_m": 0.2,
   "pass": true,
   "objects_detected": [
@@ -17,15 +17,14 @@
     "E02",
     "E03",
     "E04",
-    "E06"
-  ],
-  "objects_missed": [
     "E05",
+    "E06",
     "bench_west",
     "bench_east",
     "planter_west",
     "planter_east"
   ],
-  "map": "exhibition_map.yaml",
-  "overlay": "exhibition_map_overlay.png"
+  "objects_missed": [],
+  "map": "exhibition_simple_map_mid360.yaml",
+  "overlay": "exhibition_simple_map_mid360_overlay.png"
 }

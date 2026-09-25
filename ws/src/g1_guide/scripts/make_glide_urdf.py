@@ -453,7 +453,13 @@ def _add_imu(root: ET.Element) -> None:
     root.append(imu_gazebo)
 
 
-def _add_motion_plugins(root: ET.Element) -> None:
+def _add_motion_plugins(root: ET.Element, truth_odom: bool = False) -> None:
+    """VelocityControl plus odometry.
+
+    ``truth_odom`` (真机雷达版): Gazebo's exact pose goes to /odom_truth with
+    no TF, and the odom_drift node publishes /odom and the odom -> base_link
+    TF, the way a real robot's leg odometry would (with drift if enabled).
+    """
     # SDFormat lumps every fixed joint into the root, so base_link becomes the
     # single physical link. SDF has no model-level <gravity>; it is per link.
     gravity_off = _element("gazebo", {"reference": "base_link"})
@@ -489,12 +495,12 @@ def _add_motion_plugins(root: ET.Element) -> None:
         },
     )
     for tag, text in (
-        ("odom_topic", "/odom"),
-        ("odom_frame", "odom"),
-        ("robot_base_frame", "base_link"),
+        ("odom_topic", "/odom_truth" if truth_odom else "/odom"),
+        ("odom_frame", "odom_truth" if truth_odom else "odom"),
+        ("robot_base_frame", "base_link_truth" if truth_odom else "base_link"),
         ("dimensions", "3"),
         ("tf_topic", "/tf"),
-        ("publish_tf", "true"),
+        ("publish_tf", "false" if truth_odom else "true"),
     ):
         child = _element(tag)
         child.text = text
@@ -527,7 +533,7 @@ def generate(source_path: Path, output_path: Path, g1_ws: Path,
     _ensure_base_link(root)
     _add_camera(root)
     _add_lidar_and_imu(root, lidar_model)
-    _add_motion_plugins(root)
+    _add_motion_plugins(root, truth_odom=lidar_model == "mid360")
     _indent(root)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

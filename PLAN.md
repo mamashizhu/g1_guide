@@ -48,7 +48,7 @@
 | 避障 | 🟡 | `nav_grid.py` 用实时雷达点更新栅格并重规划；`nav_control.py` 前方 < 0.8m 停车，速度有上限 | 同上；之前失败原因是机身俯仰导致地面回波被当成障碍 |
 | 机器人姿态 | 🟡 | `nav_control.py` 先转向再前进，到站后对准展品朝向 | 未验收 |
 | 手指向展品 | ❌ 需重做（2026-09-25 用户实测 `/g1_pointing/select` 控制异常，旧实现作废，由 M2.3 重新实现） | `pointing_kinematics.py` 手臂 IK，`pointing_node.py` 左右指向 | `docs/evidence/f02b/`：误差约 5°。**只在低阶模型（骨盆固定）里做过**，展馆平移模型的手臂仍是焊死的 |
-| SLAM 建图（亮点） | ✅ 简单展馆，两个雷达版本都已建图（见 M2.1） | `slam.launch.py lidar:=simple/mid360`（slam_toolbox online_async）+ `slam_explore.py` 自动巡航 + `slam_map.py` 偏差检查 + `mid360_to_scan.py` 点云压 2D | `maps/exhibition_map*`、`maps/exhibition_map_mid360*` |
+| SLAM 建图（亮点） | ✅ 简单展馆，两个雷达版本都已建图（见 M2.1） | `slam.launch.py lidar:=simple/mid360`（slam_toolbox online_async）+ `slam_explore.py` 自动巡航 + `slam_map.py` 偏差检查 + `mid360_to_scan.py` 点云压 2D | `maps/exhibition_simple_map*`、`maps/exhibition_simple_map_mid360*` |
 
 **任务二：语音对话**：🟡 2026-09-25 已完成 `voice/`（以大模型工具调用为主、离线规则兜底），用户已亲测语音对话；连接仿真的端到端测试待做。详见下方 M3 开头的说明和 `voice/README.md`。
 
@@ -148,7 +148,8 @@ g1_guide/
 |---|------|------|------|------|
 | ✅ M2.1 | **SLAM 建图** | 运行 slam_toolbox 的 online_async 模式，输入 `/nav_scan` 和 `/odom`。用预设巡航路线自动走遍展馆，结束后用 map_saver 保存 `map.pgm/yaml` | 地图和真实布局叠加对比，墙体偏差 < 0.2m | 🤖 |
 | ✅ M2.1 结果 | 2026-09-25 简单展馆（`exhibition_simple.json`）实测，两个雷达版本 | **简化雷达版** `lidar:=simple`（默认）：虚构的水平单线雷达，8m。墙体 p95 = 0.03m 合格，但长椅、书展台、花盆低于 1.32m 扫描平面，没有进地图，中部还有未知区。**真机雷达版** `lidar:=mid360`：MID-360 按真机规格做成倒装 3D 雷达（360°×−7°～52°，40m，30 线仿真），`mid360_to_scan` 取离地 0.08～2m 的点压成 `/nav_scan`，过滤 0.5m 内的机器人自身回波。6 站全部到达，墙体 p95 = 0.06m、99.7% 在 0.2m 内，**14 个物体全部进地图**，没有未知区 | 两版都走完 6 站 | 🤖 |
-| M2.2 | 用 SLAM 地图导航 | nav_grid 增加"从 pgm 加载"模式，替换掉从配置直接生成的栅格 | 用地图模式跑完 1–6 号展位 | 🤖 |
+| ✅ M2.2 | 用 SLAM 地图导航（**可选功能，主流程不用**） | `slam_nav.launch.py`：map_server 读 SLAM 地图 + AMCL 定位 + `exhibition_nav` 地图模式（`map_yaml`、`global_frame:=map`、到站圈 0.15m）；真机雷达版可开里程计漂移（`odom_drift`） | 简单展馆实测：6/6 到站，里程计漂到 2.6m 时 AMCL 定位误差平均 0.05m；到站圈收紧后复跑的前 2 站真实误差 0.20/0.13m（之后 WSL 崩溃未跑完）。地图与展馆绑定（`*_meta.json`），错配会报错 | 🤖 |
+| ✅ M2.2b | 导航提速 | 直线 0.35→0.6 m/s，转向 0.8→1.2 rad/s；巡航不再被 0.2m 路径点间距限速，只在接近终点时减速 | 新展馆布局模式 headless 实测：速度指令达到 0.6 m/s，4、6 号站真实到站误差 0.23/0.24m | 🤖 |
 | M2.3 | **讲解时的手臂动作** | `make_glide_urdf.py` 中只把左右臂 14 个关节改为 revolute，并关闭手臂连杆的重力；每个关节配一个 gz `JointPositionController`。`gesture_player` 用关键帧加插值实现 `point/open_palm/wave/explain_loop/home`，每次在关键帧上叠加 ±5° 随机扰动，避免动作呆板。指向角度复用 `pointing_kinematics.py` 的 IK 计算 | 到站后能指向展品，末端指向误差 < 10°；平移过程中手臂不乱甩 | 🤖 |
 | M2.4 | 路径与姿态可视化 | 在 RViz 中显示规划路径（`nav_msgs/Path`）、机器人朝向、代价地图 | 截图或录屏 | 🤖 |
 | M2.5 | （可选）MuJoCo 真步行 | 使用 `unitree_rl_gym` 自带的 G1 预训练策略，配合 `deploy_mujoco.py`，在 Windows 上 pip 安装 mujoco 和 torch(CPU) 即可运行，用键盘控制速度实现双足行走。作为「步行可行性」的独立演示，**不并入 Gazebo 主线** | 能稳定走 10 秒以上，并能转向 | 🤖（需要从 GitHub 下载） |
@@ -281,3 +282,4 @@ g1_guide/
 | 2026-09-25 | 项目整体搬到 `D:\g1_guide`，去掉写死路径，新建独立仓库 | 见 git log |
 | 2026-09-25 | M2.1 SLAM 建图（简单展馆）：slam_toolbox + 自动巡航 + 地图偏差检查，墙体合格，矮障碍待解决 | 见 git log |
 | 2026-09-25 | M2.1 新增真机雷达版（MID-360 3D，按真机规格），矮障碍全部建进地图；简化雷达版保留 | 见 git log |
+| 2026-09-25 | M2.2 SLAM 地图导航（AMCL + 里程计漂移）作为可选功能完成；主流程仍用布局导航。导航提速到 0.6 m/s。新展馆建图因 Gazebo 渲染内存泄漏失败，按用户决定不再在新展馆建图 | 见 git log |

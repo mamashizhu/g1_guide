@@ -286,6 +286,57 @@ def compare_map(grid: GridMap, rectangles: Sequence[tuple[float, float, float, f
     }
 
 
+def occupied_rectangles(grid: GridMap) -> list[tuple[float, float, float, float]]:
+    """Occupied cells merged into few rectangles (row runs, then equal runs stacked)."""
+
+    rectangles = []
+    open_runs: dict[tuple[int, int], int] = {}   # (col0, col1) -> first row
+    for row in range(grid.height + 1):
+        runs = set()
+        if row < grid.height:
+            cells = grid.cells[row * grid.width:(row + 1) * grid.width]
+            col = 0
+            while col < grid.width:
+                if cells[col] == OCCUPIED:
+                    start = col
+                    while col < grid.width and cells[col] == OCCUPIED:
+                        col += 1
+                    runs.add((start, col))
+                else:
+                    col += 1
+        for run in [r for r in open_runs if r not in runs]:
+            first = open_runs.pop(run)
+            rectangles.append((run[0], first, run[1], row))
+        for run in runs:
+            open_runs.setdefault(run, row)
+    ox, oy, res = grid.origin[0], grid.origin[1], grid.resolution
+    return [(ox + c0 * res, oy + r0 * res, ox + c1 * res, oy + r1 * res)
+            for c0, r0, c1, r1 in rectangles]
+
+
+def navigation_scene(grid: GridMap, scene: dict) -> dict:
+    """Static geometry for nav_grid taken from the SLAM map instead of the layout.
+
+    Only what the robot mapped becomes an obstacle; the layout's walls,
+    exhibits and furniture are not used.  The room box is widened to enclose
+    the map with a zero-thickness wall, so it bounds the search without adding
+    geometry.  Unknown cells count as free: the live lidar still guards them.
+    """
+
+    ox, oy = grid.origin[0], grid.origin[1]
+    half_x = max(abs(ox), abs(ox + grid.width * grid.resolution))
+    half_y = max(abs(oy), abs(oy + grid.height * grid.resolution))
+    obstacles = [{"name": f"map_{i:04d}",
+                  "position": [(l + r) / 2, (b + t) / 2],
+                  "size": [r - l, t - b]}
+                 for i, (l, b, r, t) in enumerate(occupied_rectangles(grid))]
+    room = dict(scene.get("room", {}))
+    room.update(width=2 * half_x, depth=2 * half_y, wall_thickness=0.0)
+    return {"room": room,
+            "robot_clearance_radius": scene["robot_clearance_radius"],
+            "exhibits": [], "obstacles": obstacles}
+
+
 def _png(width: int, height: int, rgb: bytes) -> bytes:
     def chunk(kind: bytes, body: bytes) -> bytes:
         return (struct.pack(">I", len(body)) + kind + body
@@ -336,6 +387,37 @@ def check_map(yaml_path: str | Path, scene_path: str | Path, tolerance: float = 
     if overlay is not None:
         report["overlay"] = str(render_overlay(grid, rectangles, overlay, tolerance))
     return report
+
+
+def meta_path(map_yaml: str | Path) -> Path:
+    """Sidecar recording which scene a map was built in: ``<stem>_meta.json``."""
+
+    map_yaml = Path(map_yaml)
+    return map_yaml.with_name(map_yaml.stem + "_meta.json")
+
+
+def write_map_meta(map_yaml: str | Path, scene_path: str | Path, lidar: str = "") -> Path:
+    path = meta_path(map_yaml)
+    path.write_text(json.dumps({"scene": Path(scene_path).name, "lidar": lidar},
+                               ensure_ascii=False, indent=2), encoding="utf-8")
+    return path
+
+
+def check_map_scene(map_yaml: str | Path, scene_path: str | Path) -> None:
+    """Refuse a map built in another hall: its walls would not match the stations.
+
+    Navigating with a mismatched pair raises no error on its own -- the robot
+    just plans against the wrong walls -- so this check is the only guard.
+    """
+
+    path = meta_path(map_yaml)
+    if not path.is_file():
+        raise ValueError(f"{Path(map_yaml).name} 没有记录建图展馆（缺 {path.name}），"
+                         "请用 slam.launch.py explore:=true 重新建图")
+    built_in = json.loads(path.read_text(encoding="utf-8")).get("scene")
+    if built_in != Path(scene_path).name:
+        raise ValueError(f"地图 {Path(map_yaml).name} 是在 {built_in} 建的，"
+                         f"当前展馆是 {Path(scene_path).name}：请换对应的地图或先在该展馆建图")
 
 
 def default_scene() -> Path:

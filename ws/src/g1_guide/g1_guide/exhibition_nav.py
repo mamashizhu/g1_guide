@@ -1,8 +1,16 @@
 """ROS adapter for safe, local-only navigation of the Gazebo glide proxy.
 
-Static collision geometry is read from the same exhibition configuration that
-generates Gazebo. Laser endpoints are transformed through live TF and added to
-the grid before planning. No map/SLAM or biped gait claim is made here.
+Two modes, chosen by parameters (defaults = the original, user-verified mode):
+
+* 布局模式 (``map_yaml`` empty, ``global_frame`` odom): static collision
+  geometry is read from the exhibition configuration that generates Gazebo,
+  and the robot pose is the /odom pose.
+* SLAM 地图模式 (``map_yaml`` set, ``global_frame`` map): static geometry is
+  the occupied cells of a saved SLAM map, and the pose is the map -> base_link
+  TF that AMCL maintains on top of (drifting) odometry.
+
+In both, laser endpoints are transformed through live TF and added to the grid
+before planning.  No biped gait claim is made here.
 """
 
 from __future__ import annotations
@@ -121,18 +129,37 @@ def main(args=None) -> None:
     from std_msgs.msg import String
     from tf2_ros import Buffer, TransformException, TransformListener
 
-    from .nav_control import Pose2D, compute_command
+    from .nav_control import MAX_ANGULAR_SPEED, MAX_LINEAR_SPEED, Pose2D, compute_command
     from .nav_grid import OccupancyGrid
+    from .scene_config import load_scene
 
     class ExhibitionNavigator(Node):
         def __init__(self):
             super().__init__("exhibition_navigator")
             default_config = str(Path(get_package_share_directory("g1_guide")) / "config/exhibition.json")
             self.declare_parameter("scene_config", default_config)
-            self.config = json.loads(Path(self.get_parameter("scene_config").value).read_text(encoding="utf-8"))
+            self.declare_parameter("map_yaml", "")
+            self.declare_parameter("global_frame", "odom")
+            # Goal tolerance; the SLAM map mode tightens it to leave room for
+            # the localization error (true stop error = tolerance + that).
+            self.declare_parameter("arrival_distance", 0.25)
+            self.config = load_scene(self.get_parameter("scene_config").value)
+            self.global_frame = self.get_parameter("global_frame").value
+            self.arrival_distance = float(self.get_parameter("arrival_distance").value)
+            map_yaml = self.get_parameter("map_yaml").value
+            if map_yaml:
+                from .slam_map import check_map_scene, load_map, navigation_scene
+                check_map_scene(map_yaml, self.get_parameter("scene_config").value)
+                # Stations still come from the scene: they are the task, not the map.
+                self.static = navigation_scene(load_map(map_yaml), self.config)
+                self.get_logger().info(
+                    f"SLAM 地图模式：{map_yaml}，{len(self.static['obstacles'])} 个障碍矩形，"
+                    f"定位坐标系 {self.global_frame}")
+            else:
+                self.static = self.config
             # The follower stops below 0.80 m forward clearance; plan with
             # 0.85 m robot-centre clearance to avoid boundary deadlocks.
-            self.grid = OccupancyGrid(self.config, extra_margin=0.30)
+            self.grid = OccupancyGrid(self.static, extra_margin=0.30)
             self.stations = {item["station"]["key"]: item["station"] for item in self.config["exhibits"]}
             self.tf_buffer = Buffer()
             self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -204,8 +231,9 @@ def main(args=None) -> None:
                 values = (float(p.x), float(p.y), yaw_of(message.pose.pose.orientation))
                 if not all(math.isfinite(v) for v in values):
                     raise ValueError("non-finite odometry")
-                self.pose = Pose2D(*values)
                 self.odom_at = time.monotonic()
+                if self.global_frame == "odom":
+                    self.pose = Pose2D(*values)
             except ValueError:
                 self.pose = None
 
@@ -224,7 +252,7 @@ def main(args=None) -> None:
                 # executor ticks; never project it using the newest robot
                 # pose, which makes static walls look like moving obstacles.
                 transform = self.tf_buffer.lookup_transform(
-                    "odom", message.header.frame_id, Time.from_msg(message.header.stamp))
+                    self.global_frame, message.header.frame_id, Time.from_msg(message.header.stamp))
                 points = obstacle_endpoints(
                     message, transform.transform, float(self.config["room"]["floor_top"]))
                 if len(points) < 30:
@@ -233,7 +261,7 @@ def main(args=None) -> None:
                     return
                 self.scan_points = points
                 self.dynamic_points = [point for point in points
-                                       if not known_static_hit(point, self.config)]
+                                       if not known_static_hit(point, self.static)]
                 self.scan_origin = (float(transform.transform.translation.x),
                                     float(transform.transform.translation.y))
                 self.scan_at = time.monotonic()
@@ -242,8 +270,20 @@ def main(args=None) -> None:
             except (TransformException, ValueError):
                 return
 
+        def update_map_pose(self):
+            """Robot pose in the map frame from the localization TF."""
+            try:
+                transform = self.tf_buffer.lookup_transform(self.global_frame, "base_link", Time())
+            except TransformException:
+                self.pose = None
+                return
+            t = transform.transform
+            self.pose = Pose2D(float(t.translation.x), float(t.translation.y), yaw_of(t.rotation))
+
         def tick(self):
             now = time.monotonic()
+            if self.global_frame != "odom":
+                self.update_map_pose()
             self.project_pending_scan()
             if self.goal_key is None:
                 self.publish_stop()
@@ -299,10 +339,11 @@ def main(args=None) -> None:
             if math.isfinite(clearance):
                 self.min_clearance = min(self.min_clearance, clearance)
             final = self.path_index == len(self.path)-1
-            velocity = compute_command(self.pose, waypoint, goal, clearance, final=final)
+            velocity = compute_command(self.pose, waypoint, goal, clearance, final=final,
+                                       arrival_distance=self.arrival_distance)
             twist = Twist()
-            twist.linear.x = max(-0.35, min(0.35, float(velocity.linear_x)))
-            twist.angular.z = max(-0.8, min(0.8, float(velocity.angular_z)))
+            twist.linear.x = max(-MAX_LINEAR_SPEED, min(MAX_LINEAR_SPEED, float(velocity.linear_x)))
+            twist.angular.z = max(-MAX_ANGULAR_SPEED, min(MAX_ANGULAR_SPEED, float(velocity.angular_z)))
             if not all(math.isfinite(v) for v in (twist.linear.x, twist.angular.z)):
                 self.publish_stop()
                 self.status("invalid_command")

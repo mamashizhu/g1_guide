@@ -25,6 +25,8 @@ g1_guide/
 │           │   ├── slam_explore.py       SLAM 自动巡航建图、保存地图
 │           │   ├── slam_map.py           地图读写（pgm/yaml）与墙体偏差检查
 │           │   ├── mid360_to_scan.py     真机雷达版：MID-360 点云压成 2D /nav_scan
+│           │   ├── odom_drift.py         真机雷达版：模拟腿式里程计漂移，发布 /odom
+│           │   ├── lidar_variants.py     两个雷达版本共用的启动片段
 │           │   ├── g1_teleop.py          WASD 键盘遥控
 │           │   ├── lowlevel_*.py, joint_targets.py   低阶关节力矩 PD 控制
 │           │   ├── sensor_dashboard.py, sensor_metrics.py   传感器面板
@@ -61,10 +63,12 @@ bash "/mnt/d/g1_guide/ws/build.sh"
 | 导航状态 | `ros2 topic echo /nav/status` |
 | 放障碍 / 删障碍 | `bash /mnt/d/g1_guide/tools/spawn_box.sh box1 0 -2.5` / `remove_box.sh box1` |
 | SLAM 建图（手动开车，简单展馆） | `ros2 launch g1_guide slam.launch.py rviz:=true`，再开 `nav_keyboard` 或 `g1_teleop` |
-| SLAM 自动巡航建图并保存（简化雷达版） | `ros2 launch g1_guide slam.launch.py explore:=true rviz:=true` → `maps/exhibition_map.*` |
-| SLAM 自动巡航建图并保存（真机雷达版） | `ros2 launch g1_guide slam.launch.py lidar:=mid360 explore:=true rviz:=true` → `maps/exhibition_map_mid360.*` |
+| SLAM 自动巡航建图并保存（简化雷达版） | `ros2 launch g1_guide slam.launch.py explore:=true rviz:=true` → `maps/exhibition_simple_map.*` |
+| SLAM 自动巡航建图并保存（真机雷达版） | `ros2 launch g1_guide slam.launch.py lidar:=mid360 explore:=true rviz:=true` → `maps/exhibition_simple_map_mid360.*` |
+| **SLAM 地图导航**（真机雷达版 + 里程计漂移 + AMCL） | `ros2 launch g1_guide slam_nav.launch.py rviz:=true`，再开 `nav_keyboard` 选展位 |
+| SLAM 地图导航自动验收（走完 6 站出报告） | `ros2 launch g1_guide slam_nav.launch.py tour:=true` → `maps/nav_report.json` |
 | 手动保存当前地图 | `ros2 run nav2_map_server map_saver_cli -f /mnt/d/g1_guide/maps/my_map` |
-| 检查地图墙体偏差 | `ros2 run g1_guide slam_map_check /mnt/d/g1_guide/maps/exhibition_map.yaml --scene <场景json>` |
+| 检查地图墙体偏差 | `ros2 run g1_guide slam_map_check /mnt/d/g1_guide/maps/exhibition_simple_map.yaml --scene <场景json>` |
 | 低阶控制（骨盆固定） | `ros2 launch g1_guide lowlevel.launch.py` |
 | 发关节目标 | `ros2 topic pub --once /g1_lowlevel/target sensor_msgs/msg/JointState '{name: [left_elbow_joint], position: [0.8]}'` |
 
@@ -84,4 +88,28 @@ cd /mnt/d/g1_guide/ws/src/g1_guide && python3 -m pytest -q -p no:cacheprovider t
 | `/nav_scan` 来源 | 额外加的水平雷达 `nav_lidar_link`（真机没有） | `mid360_to_scan` 从点云取离地 0.08～2m 的点压成 2D |
 | 矮障碍（长椅、花盆） | 扫不到 | 能建进地图、能避障 |
 | 仿真负担 | 小 | 点云约 1 万点/帧，8Hz |
+
+## 两种导航模式
+
+| | 布局模式（原版，`exhibition_nav.launch.py`） | SLAM 地图模式（`slam_nav.launch.py`） |
+|---|---|---|
+| 地图 | 从布局文件 `exhibition.json` 算出栅格（事先知道所有墙和家具） | 读 SLAM 建好的 `maps/*.yaml/pgm`，只用机器人自己扫到的东西 |
+| 定位 | 直接用 Gazebo 的精确 `/odom` | AMCL：地图 + 雷达修正里程计，发布 `map → odom` |
+| 里程计 | 精确，无误差 | 真机雷达版默认开启漂移：距离 +3%、转角 +2%、行进时航向每秒漂 0.005 rad |
+| 雷达 | 简化版 2D 雷达 | 默认真机版 MID-360（`lidar:=simple` 可切回） |
+| 到站判定 | 离目标 0.25m 内 | 0.15m 内（给定位误差留余量，真实误差仍在 0.25m 内） |
+| 速度上限 | 直线 0.6 m/s，转向 1.2 rad/s | 相同 |
+| 规划、避障、跟踪 | A* + 雷达动态障碍 + 前方 0.8m 停车 | 相同 |
+
+**日常导航用布局模式**；SLAM 地图模式是可选的实验功能，目前只有简单展馆的地图（`maps/exhibition_simple_map*`）。
+
+SLAM 地图模式的完整流程与真机一致：先建图（`slam.launch.py lidar:=mid360 explore:=true`）→ 保存地图 → 用地图定位导航。
+简化雷达版建的地图里没有长椅、花盆（雷达扫不到），**不要用 `lidar:=simple` 的地图做 SLAM 地图导航**。
+
+## 工具
+
+| 工具 | 用途 |
+|------|------|
+| `python tools/render_map.py maps/<地图>.yaml` | 把 SLAM 地图画成带展品框、展位箭头、米刻度的 PNG（Windows/WSL 均可） |
+| `wsl -u root -e bash tools/run_detached.sh …` | 用系统级 systemd 托管一条 ros2 命令（仍需一条 wsl 连接保持发行版不被关闭，见脚本注释） |
 

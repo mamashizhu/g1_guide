@@ -108,6 +108,12 @@ class ComputeCommandTest(unittest.TestCase):
         self.assertGreater(command.linear_x, 0.0)
         self.assertLessEqual(command.linear_x, MAX_LINEAR_SPEED)
 
+    def test_cruise_speed_not_capped_by_short_waypoint_spacing(self):
+        pose = Pose2D(0.0, 0.0, 0.0)
+        command = compute_command(pose, Pose2D(0.4, 0.0, 0.0), Pose2D(5.0, 0.0, 0.0), 5.0)
+        self.assertEqual(command.status, "moving")
+        self.assertEqual(command.linear_x, MAX_LINEAR_SPEED)
+
     def test_invalid_negative_clearance_stops(self):
         command = compute_command(self.pose, self.waypoint, self.goal, -0.01)
         self.assertEqual(command, Velocity(0.0, 0.0, "invalid"))
