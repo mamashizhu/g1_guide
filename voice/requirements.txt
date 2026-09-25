@@ -1,0 +1,12 @@
+sounddevice
+numpy
+sherpa-onnx
+edge-tts
+miniaudio
+roslibpy
+openai
+anthropic
+pytest
+pypinyin
+PySide6-Essentials
+livekit
