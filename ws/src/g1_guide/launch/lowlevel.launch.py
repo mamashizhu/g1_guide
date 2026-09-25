@@ -66,7 +66,9 @@ def _launch(context):
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument("g1_ws", default_value="/mnt/d/智能机器人/claude_course/ws"),
+        # share/scripts is a symlink into the source tree; its ws/ is the default.
+        DeclareLaunchArgument("g1_ws", default_value=str(
+            (Path(get_package_share_directory("g1_guide")) / "scripts/make_glide_urdf.py").resolve().parents[3])),
         DeclareLaunchArgument("headless", default_value="false"),
         OpaqueFunction(function=_launch),
     ])

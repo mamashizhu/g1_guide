@@ -19,7 +19,9 @@ import numpy as np
 from .frame_sync import FrameSynchronizer
 
 
-DEFAULT_CAPTURE_DIR = "/mnt/d/智能机器人/claude_course/captures"
+# g1_guide/ -> g1_guide/ -> src/ -> ws/ -> project root (symlink-install resolves to source)
+DEFAULT_CAPTURE_DIR = os.environ.get(
+    "G1_CAPTURE_DIR", str(Path(__file__).resolve().parents[4] / "captures"))
 RGB_WINDOW = "G1 RGB"
 DEPTH_WINDOW = "G1 Depth (colorized)"
 DEPTH_DISPLAY_MAX_M = 10.0

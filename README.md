@@ -1,11 +1,11 @@
 # G1 展馆导览机器人（claude_course）
 
-本文件夹是项目的唯一工作目录。旧目录 `g1_ws/` 已弃用，这里不依赖其中任何内容。
+项目位置：`D:g1_guide`（WSL：`/mnt/d/g1_guide`）。代码里没有写死路径，整个文件夹可以随意搬动，搬动后重新运行 `ws/build.sh` 即可。
 
 ## 目录
 
 ```
-claude_course/
+g1_guide/
 ├── PLAN.md                       任务清单与计划
 ├── ws/                           ROS2 工作区
 │   ├── build.sh                  构建脚本（生成 URDF + colcon --symlink-install）
@@ -33,7 +33,7 @@ claude_course/
 ## 构建
 
 ```bash
-bash "/mnt/d/智能机器人/claude_course/ws/build.sh"
+bash "/mnt/d/g1_guide/ws/build.sh"
 ```
 
 构建使用 `--symlink-install`。改 Python、launch、config 后立即生效，无需重新构建。以下情况需要重新运行 `build.sh`：
@@ -52,12 +52,12 @@ bash "/mnt/d/智能机器人/claude_course/ws/build.sh"
 | WASD 遥控 | `ros2 run g1_guide g1_teleop` |
 | 传感器面板 | `ros2 run g1_guide sensor_dashboard` |
 | 导航状态 | `ros2 topic echo /nav/status` |
-| 放障碍 / 删障碍 | `bash /mnt/d/智能机器人/claude_course/tools/spawn_box.sh box1 0 -2.5` / `remove_box.sh box1` |
+| 放障碍 / 删障碍 | `bash /mnt/d/g1_guide/tools/spawn_box.sh box1 0 -2.5` / `remove_box.sh box1` |
 | 低阶控制（骨盆固定） | `ros2 launch g1_guide lowlevel.launch.py` |
 | 发关节目标 | `ros2 topic pub --once /g1_lowlevel/target sensor_msgs/msg/JointState '{name: [left_elbow_joint], position: [0.8]}'` |
 
 ## 测试
 
 ```bash
-cd /mnt/d/智能机器人/claude_course/ws/src/g1_guide && python3 -m pytest -q -p no:cacheprovider test
+cd /mnt/d/g1_guide/ws/src/g1_guide && python3 -m pytest -q -p no:cacheprovider test
 ```

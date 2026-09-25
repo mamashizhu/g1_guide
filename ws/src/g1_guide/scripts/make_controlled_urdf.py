@@ -21,7 +21,8 @@ def _default_g1_ws() -> Path:
     configured = os.environ.get("G1_WS")
     if configured:
         return Path(configured).expanduser()
-    return Path("/mnt/d/智能机器人/claude_course/ws")
+    # scripts/ -> g1_guide/ -> src/ -> ws/ (symlink-install resolves to source)
+    return Path(__file__).resolve().parents[3]
 
 
 def _link_names(root: ET.Element) -> set[str]:
