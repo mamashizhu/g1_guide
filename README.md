@@ -1,6 +1,6 @@
-# G1 展馆导览机器人（claude_course）
+# G1 展馆导览机器人
 
-项目位置：`D:g1_guide`（WSL：`/mnt/d/g1_guide`）。代码里没有写死路径，整个文件夹可以随意搬动，搬动后重新运行 `ws/build.sh` 即可。
+项目位置：`D:\g1_guide`（WSL：`/mnt/d/g1_guide`）。代码里没有写死路径，整个文件夹可以随意搬动，搬动后重新运行 `ws/build.sh` 即可。
 
 ## 目录
 

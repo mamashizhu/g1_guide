@@ -5,7 +5,7 @@
 本计划不沿用 `docs/agent-workboard.md` 的旧清单，按课程要求重新拆分。原则：
 1. **先做必做项，再做亮点**，每一项都要在本机上真实跑通。
 2. 只做仿真与交互，**不接真机**。
-3. `claude_course/` 是唯一工作目录。已验证的代码已迁入 `ws/src/g1_guide`（2026-09-25），旧的 `g1_ws/` 弃用。
+3. 项目目录是 `D:\g1_guide`（从 `D:\智能机器人\claude_course` 迁出，保留 git 历史）。旧目录只作参考，不再修改。
 4. 每项任务标注执行方：🤖 = Claude 能在本机独立完成并验证；👤 = 需要你本人操作。
 
 ---
@@ -96,10 +96,10 @@
 
 ---
 
-## 2. 目录规划（`claude_course/`）
+## 2. 目录规划（`D:\g1_guide`）
 
 ```
-claude_course/
+g1_guide/
 ├── PLAN.md                  ← 本文件
 ├── ws/src/g1_guide/         ROS2 主包（已迁入全部已验证代码，见 README.md）
 │   ├── g1_guide/            guide_manager、gesture_player、exhibit_detector …
@@ -127,7 +127,7 @@ claude_course/
 |---|------|------|------|------|
 | M0.1 | ~~提交现有未提交修改~~ ✅ 改为迁移 | 已验证代码迁入 `claude_course/ws`，包名改为 g1_guide | 142 项测试通过，导航和低阶控制的 headless 冒烟测试通过 | 🤖 已完成 |
 | M0.2 | WSL 装依赖 | `apt install python3-venv python3-pip ros-lyrical-slam-toolbox ros-lyrical-nav2-map-server ros-lyrical-rosbridge-server`；建 venv 时加 `--system-site-packages`，以便复用 rclpy | `ros2 pkg list` 中能看到这几个包 | 🤖（通过 `wsl -u root`，若要密码则 👤） |
-| M0.3 | Windows 端建 venv | `D:\python\python.exe -m venv claude_course\voice\.venv`，安装 roslibpy、sounddevice、numpy、PySide6 | `import` 全部成功 | 🤖 |
+| M0.3 | Windows 端建 venv | `D:\python\python.exe -m venv voice\.venv`，安装 roslibpy、sounddevice、numpy、PySide6 | `import` 全部成功 | 🤖 |
 | M0.4 | 打通 Windows↔WSL | WSL 启动 rosbridge，Windows 端用 roslibpy 发布 `/guide/goto`，WSL 端 `ros2 topic echo` 能收到 | 往返延迟 < 100ms | 🤖 |
 | M0.5 | ✅ 新建 `g1_guide` 包和构建脚本 | `ws/build.sh`，使用 `--symlink-install`，独立安装到 g1-guide-runtime | `ros2 launch g1_guide …` 可以启动 | 🤖 |
 
@@ -261,3 +261,4 @@ claude_course/
 | 2026-09-25 | 创建分支 `claude/guide-robot` 和本计划 | — |
 | 2026-09-25 | 用户可视化验证：导航、避障、低阶控制、传感器均通过；指向不可用，舍弃 | — |
 | 2026-09-25 | 已验证代码迁移到 `claude_course/ws`，包名改为 g1_guide，旧目录弃用 | 见 git log |
+| 2026-09-25 | 项目整体搬到 `D:\g1_guide`，去掉写死路径，新建独立仓库 | 见 git log |

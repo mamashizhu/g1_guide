@@ -19,7 +19,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/pelvis_ver0529.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/pelvis_ver0529.STL" />
       </geometry>
       <material name="dark" />
     </visual>
@@ -33,14 +33,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_hip_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_hip_pitch_link.STL" />
       </geometry>
       <material name="dark" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_hip_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_hip_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -58,14 +58,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_hip_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_hip_roll_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_hip_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_hip_roll_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -83,14 +83,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_hip_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_hip_yaw_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_hip_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_hip_yaw_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -108,14 +108,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_knee_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_knee_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_knee_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_knee_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -133,14 +133,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_ankle_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_ankle_pitch_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_ankle_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_ankle_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -158,7 +158,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_ankle_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_ankle_roll_link.STL" />
       </geometry>
       <material name="dark" />
     </visual>
@@ -201,14 +201,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_hip_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_hip_pitch_link.STL" />
       </geometry>
       <material name="dark" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_hip_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_hip_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -226,14 +226,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_hip_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_hip_roll_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_hip_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_hip_roll_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -251,14 +251,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_hip_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_hip_yaw_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_hip_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_hip_yaw_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -276,14 +276,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_knee_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_knee_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_knee_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_knee_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -301,14 +301,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_ankle_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_ankle_pitch_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_ankle_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_ankle_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -326,7 +326,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_ankle_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_ankle_roll_link.STL" />
       </geometry>
       <material name="dark" />
     </visual>
@@ -369,7 +369,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/waist_yaw_link_rev_1_0.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/waist_yaw_link_rev_1_0.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -388,7 +388,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/waist_roll_link_rev_1_0.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/waist_roll_link_rev_1_0.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -407,14 +407,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/torso_link_rev_1_0.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/torso_link_rev_1_0.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/torso_link_rev_1_0.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/torso_link_rev_1_0.STL" />
       </geometry>
     </collision>
   </link>
@@ -437,14 +437,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/logo_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/logo_link.STL" />
       </geometry>
       <material name="dark" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/logo_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/logo_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -457,14 +457,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/head_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/head_link.STL" />
       </geometry>
       <material name="dark" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/head_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/head_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -506,7 +506,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_shoulder_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_shoulder_pitch_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -531,7 +531,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_shoulder_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_shoulder_roll_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -556,14 +556,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_shoulder_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_shoulder_yaw_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_shoulder_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_shoulder_yaw_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -581,14 +581,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_elbow_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_elbow_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_elbow_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_elbow_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -611,14 +611,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_wrist_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_wrist_roll_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_wrist_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_wrist_roll_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -636,14 +636,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_wrist_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_wrist_pitch_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_wrist_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_wrist_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -661,14 +661,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_wrist_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_wrist_yaw_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_wrist_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_wrist_yaw_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -686,7 +686,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/left_rubber_hand.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/left_rubber_hand.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -700,7 +700,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_shoulder_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_shoulder_pitch_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -725,7 +725,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_shoulder_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_shoulder_roll_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
@@ -750,14 +750,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_shoulder_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_shoulder_yaw_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_shoulder_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_shoulder_yaw_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -775,14 +775,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_elbow_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_elbow_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_elbow_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_elbow_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -805,14 +805,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_wrist_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_wrist_roll_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_wrist_roll_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_wrist_roll_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -830,14 +830,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_wrist_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_wrist_pitch_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_wrist_pitch_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_wrist_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -855,14 +855,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_wrist_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_wrist_yaw_link.STL" />
       </geometry>
       <material name="white" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_wrist_yaw_link.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_wrist_yaw_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -880,7 +880,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <mesh filename="/mnt/d/智能机器人/claude_course/ws/src/g1_description/meshes/right_rubber_hand.STL" />
+        <mesh filename="/mnt/d/g1_guide/ws/src/g1_description/meshes/right_rubber_hand.STL" />
       </geometry>
       <material name="white" />
     </visual>
