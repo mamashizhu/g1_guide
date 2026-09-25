@@ -42,11 +42,11 @@
 | 低阶控制 | ✅ | `make_controlled_urdf.py` 生成完整 29 关节模型（固定骨盆支撑），通过 ros2_control 做力矩 PD；配套 `joint_targets.py` 限速与失联保护，`render_lowlevel_report.py` 画曲线 | `docs/evidence/f02/`、`docs/reviews/f02-review.md` |
 | 机器人在环境内移动 | ✅ | `make_glide_urdf.py` 平移模型（VelocityControl + 关闭重力），`g1_teleop.py` 键盘遥控 | 重力修复后你已手动确认不倒 |
 | 多传感器获取与展示 | ✅ | RGB-D 相机、雷达 `/scan`（360 线）、导航雷达 `/nav_scan`、IMU、odom；`sensor_dashboard.py` 面板，`g1_camera_viewer.py` 相机查看，`frame_sync.py` 时间戳配对 | `docs/evidence/f03/`、`docs/reviews/f03-review.md` |
-| 数字键 1–6 去展位 | 🟡 | `nav_keyboard.py`（数字键）、`exhibition_nav.py`（ROS 节点）、`exhibition_nav.launch.py` | 自动验收 `tmp/f04-a`…`k` 共 11 轮全部失败，而且都是**重力修复之前**跑的 |
+| 数字键 1–6 去展位 | ✅（2026-09-25 用户手动验证：`exhibition_nav.launch.py` + `nav_keyboard` 可到站；旧自动验收脚本作废） | `nav_keyboard.py`（数字键）、`exhibition_nav.py`（ROS 节点）、`exhibition_nav.launch.py` | 自动验收 `tmp/f04-a`…`k` 共 11 轮全部失败，而且都是**重力修复之前**跑的 |
 | 路径规划 | 🟡 | `nav_grid.py`：按配置生成占据栅格、膨胀后做 A* | 纯逻辑单测通过，仿真内未验收 |
 | 避障 | 🟡 | `nav_grid.py` 用实时雷达点更新栅格并重规划；`nav_control.py` 前方 < 0.8m 停车，速度有上限 | 同上；之前失败原因是机身俯仰导致地面回波被当成障碍 |
 | 机器人姿态 | 🟡 | `nav_control.py` 先转向再前进，到站后对准展品朝向 | 未验收 |
-| 手指向展品 | ✅（条件受限） | `pointing_kinematics.py` 手臂 IK，`pointing_node.py` 左右指向 | `docs/evidence/f02b/`：误差约 5°。**只在低阶模型（骨盆固定）里做过**，展馆平移模型的手臂仍是焊死的 |
+| 手指向展品 | ❌ 需重做（2026-09-25 用户实测 `/g1_pointing/select` 控制异常，旧实现作废，由 M2.3 重新实现） | `pointing_kinematics.py` 手臂 IK，`pointing_node.py` 左右指向 | `docs/evidence/f02b/`：误差约 5°。**只在低阶模型（骨盆固定）里做过**，展馆平移模型的手臂仍是焊死的 |
 | SLAM 建图（亮点） | ❌ | 无；导航用的是按配置生成的地图，不是建图 | — |
 
 **任务二：语音对话**：全部 ❌，没有任何代码。
