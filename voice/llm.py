@@ -21,6 +21,8 @@ from config import PROVIDERS, Settings
 
 MAX_HISTORY = 30  # messages kept besides the system prompt
 REQUEST_TIMEOUT = 10.0  # seconds; a visitor will not wait longer, the offline brain answers instead
+CONNECT_TIMEOUT = 4.0   # TLS handshakes here fail ~1 in 10 (direct and via proxy alike): give up fast...
+CONNECT_RETRIES = 1     # ...and retry once, so a single bad handshake never reaches the visitor
 OFFLINE_COOLDOWN = 30.0  # after a failure, skip the LLM for this long instead of timing out every turn
 
 
@@ -73,7 +75,10 @@ class OpenAICompatBackend:
         from openai import OpenAI
 
         bypass_proxy(base_url)
-        self.client = OpenAI(base_url=base_url, api_key=api_key, timeout=REQUEST_TIMEOUT, max_retries=0)
+        import openai
+
+        self.client = OpenAI(base_url=base_url, api_key=api_key, max_retries=CONNECT_RETRIES,
+                             timeout=openai.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT))
         self.model = model
         self.system = system
         self.tools = [{"type": "function",
@@ -127,7 +132,8 @@ class ClaudeBackend:
     def __init__(self, system: str, tools: list[Tool], model: str, api_key: str):
         import anthropic
 
-        self.client = anthropic.Anthropic(api_key=api_key, timeout=REQUEST_TIMEOUT, max_retries=0)
+        self.client = anthropic.Anthropic(api_key=api_key, max_retries=CONNECT_RETRIES,
+                                          timeout=anthropic.Timeout(REQUEST_TIMEOUT, connect=CONNECT_TIMEOUT))
         self.model = model
         self.system = system
         self.tools = [{"name": t.name, "description": t.description, "input_schema": t.parameters}

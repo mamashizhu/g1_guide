@@ -4,6 +4,7 @@
     gui.cmd --no-robot      不连接 rosbridge
     gui.cmd --offline       只用离线规则
     gui.cmd --no-mic        不开麦克风，只用输入框和按钮
+    gui.cmd --wake          需要唤醒词“你好小吉”（窗口里也能随时开关）
 """
 
 from __future__ import annotations
@@ -14,13 +15,15 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QTextCursor
-from PySide6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QGroupBox, QHBoxLayout,
-                               QLabel, QLineEdit, QMainWindow, QPlainTextEdit, QProgressBar,
-                               QPushButton, QTextBrowser, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QGridLayout, QGroupBox,
+                               QHBoxLayout, QLabel, QLineEdit, QMainWindow, QPlainTextEdit,
+                               QProgressBar, QPushButton, QSlider, QTextBrowser, QVBoxLayout,
+                               QWidget)
 
 from config import load_settings
+from dialog import AUDIENCES
 from engine import GuideEngine
 
 STATE_STYLE = {
@@ -30,6 +33,7 @@ STATE_STYLE = {
     "speaking": ("说话中", "#6a1b9a"),
     "muted": ("麦克风关闭", "#757575"),
     "idle": ("等待输入", "#757575"),
+    "sleeping": ("待唤醒：说“你好小吉”", "#37474f"),
 }
 NAV_STATE = {
     "unknown": "未知", "requested": "收到目标", "moving": "移动中", "aligning": "调整朝向",
@@ -105,9 +109,31 @@ class GuideWindow(QMainWindow):
         self.barge_box.setChecked(engine.barge_in)
         self.barge_box.setEnabled(engine.listen)
         self.barge_box.toggled.connect(lambda on: setattr(engine, "barge_in", on))
+        self.wake_box = QCheckBox("需要唤醒词“你好小吉”（30 秒无人说话自动休眠）")
+        self.wake_box.setChecked(engine.wake_word)
+        self.wake_box.setEnabled(engine.listen)
+        self.wake_box.toggled.connect(self.toggle_wake)
+        self.audience = QComboBox()
+        for key, name in AUDIENCES.items():
+            self.audience.addItem(f"{name}模式", key)
+        self.audience.currentIndexChanged.connect(
+            lambda _: engine.set_style(audience=self.audience.currentData()))
+        self.humor = QSlider(Qt.Orientation.Horizontal)
+        self.humor.setRange(0, 10)
+        self.humor.setPageStep(1)
+        self.humor_label = QLabel()
+        self.humor.valueChanged.connect(self.on_humor)
+        style_row = QHBoxLayout()
+        style_row.addWidget(QLabel("讲解"))
+        style_row.addWidget(self.audience)
+        style_row.addWidget(QLabel("幽默"))
+        style_row.addWidget(self.humor, 1)
+        style_row.addWidget(self.humor_label)
         options = QVBoxLayout()
         options.addWidget(self.mic_box)
         options.addWidget(self.barge_box)
+        options.addWidget(self.wake_box)
+        options.addLayout(style_row)
         options_box = QGroupBox("选项")
         options_box.setLayout(options)
 
@@ -151,6 +177,31 @@ class GuideWindow(QMainWindow):
         self.timer.start(100)
         self.refresh()
 
+    # ---- options ----
+    def toggle_wake(self, on: bool) -> None:
+        self.engine.wake_word = on
+        if on:
+            self.engine._awake_until = 0.0  # start asleep so the wake word is needed right away
+
+    def on_humor(self, value: int) -> None:
+        self.humor_label.setText(f"{value}/10")
+        if value != self.engine.style.humor:
+            self.engine.set_style(humor=value)
+
+    def sync_style(self) -> None:
+        """Follow style changes made by voice ("讲简单点", "幽默一点")."""
+        style = self.engine.style
+        index = self.audience.findData(style.audience)
+        if index != self.audience.currentIndex():
+            self.audience.blockSignals(True)
+            self.audience.setCurrentIndex(index)
+            self.audience.blockSignals(False)
+        if self.humor.value() != style.humor:
+            self.humor.blockSignals(True)
+            self.humor.setValue(style.humor)
+            self.humor.blockSignals(False)
+        self.humor_label.setText(f"{style.humor}/10")
+
     # ---- conversation ----
     def send_typed(self) -> None:
         text = self.input.text().strip()
@@ -185,6 +236,7 @@ class GuideWindow(QMainWindow):
     # ---- status ----
     def refresh(self) -> None:
         engine = self.engine
+        self.sync_style()
         text, color = STATE_STYLE.get(engine.state, (engine.state, "#757575"))
         pill(self.state_label, text, color)
         level = engine.listener.level if engine.listener is not None else 0.0
@@ -226,13 +278,15 @@ def main() -> None:
     parser.add_argument("--mute", action="store_true")
     parser.add_argument("--barge-in", action="store_true")
     parser.add_argument("--gain", type=float, default=2.0)
+    parser.add_argument("--wake", action="store_true")
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
     bridge = Bridge()
     engine = GuideEngine(load_settings(), use_robot=not args.no_robot, speak=not args.mute,
                          listen=not args.no_mic, barge_in=args.barge_in, gain=args.gain,
-                         offline=args.offline, ui=lambda kind, text="": bridge.message.emit(kind, text))
+                         offline=args.offline, wake_word=args.wake,
+                         ui=lambda kind, text="": bridge.message.emit(kind, text))
     window = GuideWindow(engine, bridge)
     window.show()
     threading.Thread(target=engine.start, daemon=True).start()  # model loading must not freeze the window

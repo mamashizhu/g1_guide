@@ -261,3 +261,33 @@ def test_engine_runs_turns_and_interrupt_cancels_stream():
     assert chunks == ["第一句。"]
     assert any("打断" in t for k, t in log if k == "log")
     engine.close()
+
+
+def test_stop_words_stop_robot_before_the_llm_answers():
+    engine, log = make_engine()
+    order = []
+
+    class Robot:
+        connected = True
+
+        def stop(self):
+            order.append("stop")
+            return "已停止"
+
+        def close(self): ...
+
+    class Slow:
+        def send(self, text, on_text):
+            order.append("llm")
+            on_text("好的。")
+            return []
+
+        def add_tool_results(self, results): ...
+
+    engine.robot = Robot()
+    engine.dialog.backend = Slow()
+    engine.start()
+    engine.submit_text("等一下，先别走")
+    engine.wait_idle()
+    assert order == ["stop", "llm"]
+    engine.close()

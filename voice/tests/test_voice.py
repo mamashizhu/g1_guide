@@ -5,7 +5,9 @@ from types import SimpleNamespace as NS
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dialog import GuideDialog, build_system_prompt, build_tools, event_message  # noqa: E402
+from dialog import GuideDialog, Style, build_system_prompt, build_tools, event_message  # noqa: E402
+
+TAG = Style().tag()
 from exhibits import load_exhibits  # noqa: E402
 from llm import OpenAICompatBackend, ToolCall, _trim  # noqa: E402
 from robot import RobotLink  # noqa: E402
@@ -94,7 +96,7 @@ def test_goto_tool_drives_robot_without_extra_round_trip():
     reply = GuideDialog(backend, robot, log=lambda _: None).turn("带我去看地球仪", lambda _: None)
     assert reply == "好的，请跟我来。"
     assert robot.calls == [("goto", "E06")]
-    assert backend.sent == ["带我去看地球仪"]
+    assert backend.sent == [f"{TAG} 带我去看地球仪"]
     assert backend.results[0][1] == "已出发前往 E06"
 
 
@@ -105,7 +107,7 @@ def test_gesture_with_partial_speech_lets_model_continue():
                                ("这就是植物细胞。", [])])
     reply = GuideDialog(backend, robot, log=lambda _: None).turn("[系统事件] 已到达", lambda _: None)
     assert reply == "我们到了。这就是植物细胞。"
-    assert backend.sent == ["[系统事件] 已到达", None]
+    assert backend.sent == [f"{TAG} [系统事件] 已到达", None]
 
 
 def test_silent_tool_call_gets_follow_up_for_speech():
@@ -113,7 +115,7 @@ def test_silent_tool_call_gets_follow_up_for_speech():
     backend = ScriptedBackend([("", [ToolCall("1", "stop_robot", {})]), ("好的，我停下了。", [])])
     reply = GuideDialog(backend, robot, log=lambda _: None).turn("停", lambda _: None)
     assert reply == "好的，我停下了。"
-    assert backend.sent == ["停", None]
+    assert backend.sent == [f"{TAG} 停", None]
 
 
 def test_unknown_tool_is_reported_not_raised():

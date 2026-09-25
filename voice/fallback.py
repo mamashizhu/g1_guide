@@ -12,6 +12,7 @@ import re
 from collections import Counter
 from typing import Callable
 
+from dialog import Style, split_style
 from exhibits import Exhibit
 from llm import ToolCall
 
@@ -29,6 +30,12 @@ GREET_WORDS = ("你好", "您好", "嗨", "哈喽", "早上好", "下午好")
 WHO_WORDS = ("你是谁", "叫什么", "你是什么")
 BYE_WORDS = ("再见", "拜拜", "谢谢你", "我走了")
 REPEAT_WORDS = ("再说一遍", "没听清", "重复一下", "再讲一遍")
+CHILD_WORDS = ("简单点", "简单一点", "小朋友", "听不懂", "我是小孩")
+EXPERT_WORDS = ("专业一点", "专业点", "详细讲", "详细一点", "深入一点")
+NORMAL_WORDS = ("正常讲", "普通模式", "正常模式")
+FUNNY_WORDS = ("幽默一点", "幽默点", "搞笑", "有趣一点", "好玩一点")
+SERIOUS_WORDS = ("严肃点", "严肃一点", "正经点", "正经一点", "别开玩笑")
+INTRO_SENTENCES = {"child": 2, "normal": 4, "expert": 99}  # how much of the intro to read out
 INTRO_WORDS = ("介绍", "讲讲", "讲一下", "说说", "是什么")
 LOCATE_WORDS = ("在哪", "怎么走", "怎么去", "在什么地方")
 INTEREST_WORDS = ("感兴趣", "喜欢", "想了解", "想知道", "有意思")
@@ -113,6 +120,7 @@ class RuleBackend:
         self.goal: Exhibit | None = None      # last navigation target
         self.last_reply = ""
         self.offer: Exhibit | None = None     # exhibit we just suggested visiting
+        self.style = Style()                  # read from the tag GuideDialog puts on every message
         self.faq = FaqIndex(exhibits)
         self._call_seq = 0
 
@@ -148,12 +156,19 @@ class RuleBackend:
         return best
 
     def respond(self, text: str) -> tuple[str, list[ToolCall]]:
+        style, text = split_style(text)
+        if style is not None:
+            self.style = style
         event = re.match(r"\[系统事件\]", text)
         if event:
             return self._on_event(text)
         norm = normalize(text)
         exhibit = self.find_exhibit(norm)
         offer, self.offer = self.offer, None
+
+        restyle = self._restyle(norm)
+        if restyle:
+            return restyle
 
         if offer and len(norm) <= 6 and not exhibit:
             if _has(norm, NO_WORDS):
@@ -217,6 +232,23 @@ class RuleBackend:
             return f"关于{exhibit.title}，这个问题我不太确定。你可以问问它的原理、用途，或者让我带你去看看。", []
         return "抱歉，我现在网络不太好，只能回答展品相关的问题。你可以说“有什么展品”，或者“带我去看地球仪”。", []
 
+    def _restyle(self, norm: str) -> tuple[str, list[ToolCall]] | None:
+        change, reply = {}, ""
+        if _has(norm, CHILD_WORDS):
+            change, reply = {"audience": "child"}, "好呀，那我讲得简单一点，小朋友也能听懂。"
+        elif _has(norm, EXPERT_WORDS):
+            change, reply = {"audience": "expert"}, "好的，接下来我讲得专业、详细一些。"
+        elif _has(norm, NORMAL_WORDS):
+            change, reply = {"audience": "normal"}, "好的，恢复正常讲解。"
+        elif _has(norm, FUNNY_WORDS):
+            change, reply = {"humor": min(10, self.style.humor + 3)}, "没问题，我尽量风趣一点。"
+        elif _has(norm, SERIOUS_WORDS):
+            change, reply = {"humor": 0}, "好的，我认真讲。"
+        if not change:
+            return None
+        self.style.update(**change)
+        return reply, [self._call("set_style", change)]
+
     def _on_event(self, text: str) -> tuple[str, list[ToolCall]]:
         match = re.search(r"(E\d\d)", text)
         exhibit = self.by_id.get(match.group(1)) if match else None
@@ -224,7 +256,8 @@ class RuleBackend:
             self.current = exhibit
             self.goal = None
             nxt = f"看完之后，推荐你去看{exhibit.next_hint.split('：')[0]}。" if exhibit.next_hint else ""
-            return (f"我们到了，这就是{exhibit.title}。{self._first_sentences(exhibit.intro, 4)}{nxt}有问题可以随时问我。",
+            intro = self._first_sentences(exhibit.intro, INTRO_SENTENCES[self.style.audience])
+            return (f"我们到了，这就是{exhibit.title}。{intro}{nxt}有问题可以随时问我。",
                     [self._call("gesture", {"name": "present", "exhibit_id": exhibit.exhibit_id})])
         if "挡住" in text:
             return "前面的路被挡住了，我先停一下，重新找条路。", []
