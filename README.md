@@ -58,6 +58,7 @@ bash "/mnt/d/g1_guide/ws/build.sh"
 |------|------|
 | 展馆 + 导航 | `ros2 launch g1_guide exhibition_nav.launch.py` |
 | 数字键选展位（1–6，0 取消） | `ros2 run g1_guide nav_keyboard` |
+| 讲解手势（wave / point / present / explain_loop / emphasize / invite / home） | `ros2 topic pub --once /guide/gesture std_msgs/String "data: wave"`；动作定义在 `config/gestures.yaml` |
 | WASD 遥控 | `ros2 run g1_guide g1_teleop` |
 | 传感器面板 | `ros2 run g1_guide sensor_dashboard` |
 | 导航状态 | `ros2 topic echo /nav/status` |

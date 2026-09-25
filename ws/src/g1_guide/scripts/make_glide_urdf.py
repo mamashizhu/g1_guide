@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Generate a fixed-base G1 URDF with RGB-D, lidar, and IMU sensors for Gazebo Jetty.
 
+Legs and waist are welded so the body glides as one rigid body; the 14 arm
+joints stay revolute and are held by per-joint position controllers so the
+guide can gesture (``gesture_player``).
+
 The script deliberately refuses to fabricate a robot model. It reads the official
 Unitree source model from ``$G1_WS/src/g1_description/g1_29dof_mode_11.urdf``
 and writes the generated result only after the source has been found.
@@ -75,8 +79,37 @@ MOVABLE_ONLY_CHILDREN = {
 }
 
 
-def _freeze_joints(root: ET.Element) -> None:
+ARM_JOINT_SUFFIXES = (
+    "shoulder_pitch", "shoulder_roll", "shoulder_yaw", "elbow",
+    "wrist_roll", "wrist_pitch", "wrist_yaw",
+)
+ARM_JOINTS = tuple(
+    f"{side}_{suffix}_joint" for side in ("left", "right") for suffix in ARM_JOINT_SUFFIXES
+)
+# gesture_player publishes std_msgs/Float64 here; config/bridge.yaml forwards it.
+ARM_COMMAND_TOPIC = "/g1/arm/{joint}/cmd_pos"
+GESTURES_FILE = Path(__file__).resolve().parents[1] / "config" / "gestures.yaml"
+
+
+def _arm_joints_present(root: ET.Element) -> list[str]:
+    """Return the arm joints to keep movable; all 14 or none (test fixtures)."""
+
+    revolute = {
+        joint.get("name") for joint in root.findall("joint")
+        if joint.get("type") in ("revolute", "continuous")
+    }
+    present = [name for name in ARM_JOINTS if name in revolute]
+    if present and len(present) != len(ARM_JOINTS):
+        missing = sorted(set(ARM_JOINTS) - set(present))
+        raise ValueError("Source URDF has only part of the arm chain; missing " + ", ".join(missing))
+    return present
+
+
+def _freeze_joints(root: ET.Element, keep: Iterable[str] = ()) -> None:
+    keep = set(keep)
     for joint in root.findall("joint"):
+        if joint.get("name") in keep:
+            continue
         joint.set("type", "fixed")
         for child in list(joint):
             if child.tag in MOVABLE_ONLY_CHILDREN:
@@ -460,8 +493,8 @@ def _add_motion_plugins(root: ET.Element, truth_odom: bool = False) -> None:
     no TF, and the odom_drift node publishes /odom and the odom -> base_link
     TF, the way a real robot's leg odometry would (with drift if enabled).
     """
-    # SDFormat lumps every fixed joint into the root, so base_link becomes the
-    # single physical link. SDF has no model-level <gravity>; it is per link.
+    # SDFormat lumps every fixed joint into the root, so base_link carries the
+    # whole body except the arm links (those get their own gravity-off tags). SDF has no model-level <gravity>; it is per link.
     gravity_off = _element("gazebo", {"reference": "base_link"})
     no_gravity = _element("gravity")
     no_gravity.text = "false"
@@ -509,6 +542,77 @@ def _add_motion_plugins(root: ET.Element, truth_odom: bool = False) -> None:
     root.append(gazebo)
 
 
+def _home_pose(joints: list[str]) -> dict[str, float]:
+    """Initial arm angles (rad) = the ``home`` pose from config/gestures.yaml."""
+
+    import math
+    import yaml
+
+    data = yaml.safe_load(GESTURES_FILE.read_text(encoding="utf-8"))
+    home = data["poses"]["home"]
+    mirror = (1, -1, -1, 1, -1, 1, -1)
+    result = {}
+    for side in ("left", "right"):
+        values = home[side]
+        if isinstance(values, str):
+            values = home[values]
+        signs = mirror if side == "right" else (1,) * 7
+        for suffix, sign, degrees in zip(ARM_JOINT_SUFFIXES, signs, values):
+            result[f"{side}_{suffix}_joint"] = sign * math.radians(float(degrees))
+    return {name: result[name] for name in joints}
+
+
+def _add_arm_control(root: ET.Element, joints: list[str]) -> None:
+    """Hold each arm joint with a stiff position controller.
+
+    Velocity-command mode makes the joint track its setpoint kinematically, so
+    no gains need tuning and the arm links (gravity off, like base_link) do not
+    sag or swing while the body glides.
+    """
+
+    if not joints:
+        return
+    parents = {j.get("name"): j.find("child").get("link") for j in root.findall("joint")}
+    for joint in joints:
+        link = _element("gazebo", {"reference": parents[joint]})
+        gravity = _element("gravity")
+        gravity.text = "false"
+        link.append(gravity)
+        root.append(link)
+
+    gazebo = _element("gazebo")
+    home = _home_pose(joints)
+    for joint in joints:
+        plugin = _element("plugin", {
+            "name": "gz::sim::systems::JointPositionController",
+            "filename": "gz-sim-joint-position-controller-system",
+        })
+        for tag, text in (
+            ("joint_name", joint),
+            ("topic", ARM_COMMAND_TOPIC.format(joint=joint)),
+            ("use_velocity_commands", "true"),
+            ("initial_position", f"{home[joint]:.6f}"),
+        ):
+            child = _element(tag)
+            child.text = text
+            plugin.append(child)
+        gazebo.append(plugin)
+
+    states = _element("plugin", {
+        "name": "gz::sim::systems::JointStatePublisher",
+        "filename": "gz-sim-joint-state-publisher-system",
+    })
+    topic = _element("topic")
+    topic.text = "/joint_states"
+    states.append(topic)
+    for joint in joints:
+        name = _element("joint_name")
+        name.text = joint
+        states.append(name)
+    gazebo.append(states)
+    root.append(gazebo)
+
+
 def _indent(root: ET.Element) -> None:
     ET.indent(root, space="  ")
 
@@ -529,11 +633,13 @@ def generate(source_path: Path, output_path: Path, g1_ws: Path,
         raise ValueError(f"Source URDF is not valid XML: {source_path}") from exc
 
     _rewrite_meshes(root, source_path, g1_ws)
-    _freeze_joints(root)
+    arm_joints = _arm_joints_present(root)
+    _freeze_joints(root, keep=arm_joints)
     _ensure_base_link(root)
     _add_camera(root)
     _add_lidar_and_imu(root, lidar_model)
     _add_motion_plugins(root, truth_odom=lidar_model == "mid360")
+    _add_arm_control(root, arm_joints)
     _indent(root)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

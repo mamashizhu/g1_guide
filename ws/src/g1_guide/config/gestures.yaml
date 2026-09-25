@@ -1,0 +1,91 @@
+# 讲解手势库（gesture_player 读取）。改这里的角度立即生效（symlink 安装），
+# 但 home 姿势同时是 Gazebo 里手臂的初始角度，改 home 后要重新运行 build.sh。
+#
+# 角度单位：度。每只手臂 7 个值，顺序：
+#   肩 pitch, 肩 roll, 肩 yaw, 肘, 腕 roll, 腕 pitch, 腕 yaw
+# 所有数值都按「左臂约定」书写，右臂自动镜像，所以对称姿势两边写同一组数。
+# 左臂约定下：肩 pitch 负 = 手臂向前抬；肩 roll 正 = 向外张开；
+#   肘 0 = 前臂与上臂成 90°，肘 90 = 手臂伸直；腕 roll -90 = 掌心朝上。
+# 一只手臂也可以写成：
+#   另一个姿势名，如 home   —— 取那个姿势里这只手臂的角度
+#   keep                    —— 保持当前角度不动（用于插入式动作，如 emphasize）
+
+poses:
+  home:           {left: [5, 10, 0, 70, 0, 0, 0], right: [5, 10, 0, 70, 0, 0, 0]}
+
+  wave_up:        {left: home, right: [-10, 75, 90, 10, 0, 0, 0]}
+  wave_out:       {left: home, right: [-10, 75, 90, 35, 0, 0, 0]}
+  wave_in:        {left: home, right: [-10, 75, 90, -10, 0, 0, 0]}
+
+  present_ready:  {left: home, right: [-30, 15, 0, 40, -60, 0, 0]}
+  present:        {left: home, right: [-35, 40, 20, 20, -90, 0, 0]}
+
+  explain_a:      {left: [-22, 12, -10, 15, -35, 0, 0], right: [-15, 12, -10, 25, -35, 0, 0]}
+  explain_b:      {left: [-15, 12, -10, 25, -35, 0, 0], right: [-22, 12, -10, 15, -35, 0, 0]}
+  explain_open:   {left: [-25, 18, 5, 10, -50, 0, 0], right: [-25, 18, 5, 10, -50, 0, 0]}
+
+  emphasize_up:   {left: keep, right: [-30, 10, -10, -20, -20, 0, 0]}
+  emphasize_down: {left: keep, right: [-22, 10, -10, 30, -20, 0, 0]}
+
+  invite:         {left: [-25, 35, 20, 15, -90, 0, 0], right: [-25, 35, 20, 15, -90, 0, 0]}
+
+# 每个动作是一串关键帧：time = 从上一帧过渡到这一帧的秒数，hold = 到达后停留秒数。
+# 第一帧的过渡时间会按关节最大速度自动拉长，避免从远处猛甩过来。
+# loop: true   循环播放，直到收到下一个动作
+# then:        播完之后 —— home 回到自然下垂；hold 停在最后一帧；
+#              resume 回到被打断的循环动作（如讲解中插入一次强调）
+# jitter_deg:  每一轮给每个关节加 ±N° 随机扰动，让重复动作不呆板
+# 行走中（/nav/status 为移动状态）只允许 home，其余动作会被拒绝。
+gestures:
+  home:
+    frames:
+      - {pose: home, time: 1.2}
+    then: hold
+
+  wave:
+    frames:
+      - {pose: wave_up, time: 0.9}
+      - {pose: wave_out, time: 0.35}
+      - {pose: wave_in, time: 0.45}
+      - {pose: wave_out, time: 0.45}
+      - {pose: wave_in, time: 0.45}
+      - {pose: wave_out, time: 0.45}
+      - {pose: wave_up, time: 0.35, hold: 0.2}
+    then: home
+    jitter_deg: 3
+
+  # 指向由 IK 实时计算（目标展品在哪就指哪），不需要写关键帧
+  point:
+    kind: point
+    time: 1.2
+    hold: 3.0
+    then: hold
+
+  present:
+    frames:
+      - {pose: present_ready, time: 0.6}
+      - {pose: present, time: 0.8, hold: 1.5}
+    then: hold
+    jitter_deg: 4
+
+  explain_loop:
+    loop: true
+    frames:
+      - {pose: explain_a, time: 1.1}
+      - {pose: explain_b, time: 1.1}
+      - {pose: explain_open, time: 1.2, hold: 0.3}
+      - {pose: explain_b, time: 1.0}
+    jitter_deg: 5
+
+  emphasize:
+    frames:
+      - {pose: emphasize_up, time: 0.35}
+      - {pose: emphasize_down, time: 0.25, hold: 0.4}
+    then: resume
+    jitter_deg: 2
+
+  invite:
+    frames:
+      - {pose: invite, time: 1.0, hold: 2.0}
+    then: hold
+    jitter_deg: 3

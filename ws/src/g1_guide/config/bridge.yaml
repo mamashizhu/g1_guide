@@ -62,6 +62,84 @@
   direction: GZ_TO_ROS
   frame_id: imu_in_torso
 
+# 手臂：gesture_player 发关节目标角 → Gazebo JointPositionController；
+# Gazebo JointStatePublisher → /joint_states → robot_state_publisher 发手臂 TF。
+- ros_topic_name: /joint_states
+  gz_topic_name: /joint_states
+  ros_type_name: sensor_msgs/msg/JointState
+  gz_type_name: gz.msgs.Model
+  direction: GZ_TO_ROS
+- ros_topic_name: /g1/arm/left_shoulder_pitch_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_shoulder_pitch_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/left_shoulder_roll_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_shoulder_roll_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/left_shoulder_yaw_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_shoulder_yaw_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/left_elbow_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_elbow_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/left_wrist_roll_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_wrist_roll_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/left_wrist_pitch_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_wrist_pitch_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/left_wrist_yaw_joint/cmd_pos
+  gz_topic_name: /g1/arm/left_wrist_yaw_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_shoulder_pitch_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_shoulder_pitch_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_shoulder_roll_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_shoulder_roll_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_shoulder_yaw_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_shoulder_yaw_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_elbow_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_elbow_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_wrist_roll_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_wrist_roll_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_wrist_pitch_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_wrist_pitch_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+- ros_topic_name: /g1/arm/right_wrist_yaw_joint/cmd_pos
+  gz_topic_name: /g1/arm/right_wrist_yaw_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: gz.msgs.Double
+  direction: ROS_TO_GZ
+
 # ros_gz_bridge applies frame_id per GZ_TO_ROS bridge entry. The generated URDF
 # also declares d435_optical_frame as the sensor optical frame and the fixed TF
 # d435_link -> d435_optical_frame. The generated lidar and IMU declare their

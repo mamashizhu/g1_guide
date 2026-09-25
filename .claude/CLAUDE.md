@@ -13,6 +13,7 @@
 ```bash
 ros2 launch g1_guide exhibition_nav.launch.py   # 展馆 + 导航
 ros2 run g1_guide nav_keyboard                  # 数字键 1–6 选展位
+ros2 topic pub --once /guide/gesture std_msgs/String "data: wave"   # 讲解手势（exhibition_nav 已带 gesture_player）
 ros2 run g1_guide g1_teleop                     # WASD
 ros2 run g1_guide sensor_dashboard              # 传感器面板
 ros2 launch g1_guide lowlevel.launch.py         # 低阶关节控制（骨盆固定）
@@ -65,9 +66,9 @@ bash /mnt/d/g1_guide/ws/build.sh
 
 ## 机器人模型要点
 
-- 平移模型（`make_glide_urdf.py`）：所有关节都是 fixed，整个机器人是一个刚体；由 VelocityControl 直接设定速度；base_link **必须关闭重力**，否则会倒或"起飞"。
+- 平移模型（`make_glide_urdf.py`）：腿和腰焊死（fixed），身体是一个刚体，由 VelocityControl 直接设定速度；base_link **必须关闭重力**，否则会倒或"起飞"。左右臂 14 个关节保持 revolute，手臂连杆也关闭重力，每个关节由 gz `JointPositionController`（速度指令模式）保持在 `/g1/arm/<关节>/cmd_pos` 给的角度。
 - 低阶模型（`make_controlled_urdf.py`）：29 个关节，骨盆固定，ros2_control 做力矩 PD。
-- 旧的手臂指向实现用户实测不可用，已舍弃，需要重做（PLAN M2.3）。
+- 讲解手势（PLAN M2.3）：`gesture_player` 订阅 `/guide/gesture`，动作定义全在 `config/gestures.yaml`（角度按左臂约定写，右臂自动镜像）。`home` 姿势也是 Gazebo 里手臂的初始角，改了 home 要重新 `build.sh`。行走中（`/nav/status` 为 moving 等状态）只允许 home；到站后自动指向展品。指向用 `arm_kinematics.py` 的 IK，不要再用旧的 `pointing_kinematics.py`。
 
 ## 展馆模型要点
 

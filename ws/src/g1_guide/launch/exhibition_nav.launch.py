@@ -24,4 +24,7 @@ def generate_launch_description():
         Node(package="g1_guide", executable="exhibition_nav",
              name="exhibition_navigator", output="screen",
              parameters=[{"scene_config": scene_config, "use_sim_time": True}]),
+        Node(package="g1_guide", executable="gesture_player",
+             name="gesture_player", output="screen",
+             parameters=[{"scene_config": scene_config, "use_sim_time": True}]),
     ])
