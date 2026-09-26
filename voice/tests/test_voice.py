@@ -38,8 +38,8 @@ def test_prompt_and_tool_enum_cover_all_exhibits():
 def test_sentence_buffer_releases_complete_sentences():
     buf = SentenceBuffer()
     assert buf.feed("好的，请跟") == []
-    assert buf.feed("我来。地球仪在") == ["好的，请跟我来。"]
-    assert buf.flush() == ["地球仪在"]
+    assert buf.feed("我来。青花瓷在") == ["好的，请跟我来。"]
+    assert buf.flush() == ["青花瓷在"]
 
 
 def test_sentence_buffer_breaks_long_clause_at_comma():
@@ -49,8 +49,8 @@ def test_sentence_buffer_breaks_long_clause_at_comma():
 
 
 def test_clean_for_speech_drops_markdown_and_emoji():
-    assert clean_for_speech("**地球仪** 🌍 很有趣") == "地球仪  很有趣"
-    assert clean_for_speech("前往 E06 地球仪") == "前往 六号展品 地球仪"
+    assert clean_for_speech("**青花瓷** 🌍 很有趣") == "青花瓷  很有趣"
+    assert clean_for_speech("前往 E06 青花瓷") == "前往 六号展品 青花瓷"
 
 
 # ---------------- dialog orchestration ----------------
@@ -93,10 +93,10 @@ class ScriptedBackend:
 def test_goto_tool_drives_robot_without_extra_round_trip():
     robot = FakeRobot()
     backend = ScriptedBackend([("好的，请跟我来。", [ToolCall("1", "goto_exhibit", {"exhibit_id": "E06"})])])
-    reply = GuideDialog(backend, robot, log=lambda _: None).turn("带我去看地球仪", lambda _: None)
+    reply = GuideDialog(backend, robot, log=lambda _: None).turn("带我去看青花瓷", lambda _: None)
     assert reply == "好的，请跟我来。"
     assert robot.calls == [("goto", "E06")]
-    assert backend.sent == [f"{TAG} 带我去看地球仪"]
+    assert backend.sent == [f"{TAG} 带我去看青花瓷"]
     assert backend.results[0][1] == "已出发前往 E06"
 
 
@@ -104,9 +104,9 @@ def test_gesture_with_partial_speech_lets_model_continue():
     robot = FakeRobot()
     robot.gesture = lambda name, exhibit_id="": f"已发出手势 {name}"
     backend = ScriptedBackend([("我们到了。", [ToolCall("1", "gesture", {"name": "point"})]),
-                               ("这就是植物细胞。", [])])
+                               ("这就是星月夜。", [])])
     reply = GuideDialog(backend, robot, log=lambda _: None).turn("[系统事件] 已到达", lambda _: None)
-    assert reply == "我们到了。这就是植物细胞。"
+    assert reply == "我们到了。这就是星月夜。"
     assert backend.sent == [f"{TAG} [系统事件] 已到达", None]
 
 
@@ -175,7 +175,7 @@ def test_openai_backend_assembles_streamed_tool_call():
               _chunk(tool_calls=[_tc(0, None, None, 'id": "E03"}')])]
     backend.client = NS(chat=NS(completions=NS(create=lambda **kw: iter(stream))))
     pieces = []
-    calls = backend.send("去看细胞", pieces.append)
+    calls = backend.send("去看星空", pieces.append)
     assert "".join(pieces) == "好的，走吧。"
     assert calls == [ToolCall("call_1", "goto_exhibit", {"exhibit_id": "E03"})]
     backend.add_tool_results([(calls[0], "已出发")])

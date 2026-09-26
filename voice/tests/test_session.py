@@ -24,7 +24,7 @@ EXHIBITS = load_exhibits()
     ("你好小吉", ""),
     ("小吉", ""),
     ("你好，小鸡。", ""),                         # ASR homophones still wake it
-    ("晓吉带我去看地球仪", "带我去看地球仪"),
+    ("晓吉带我去看青花瓷", "带我去看青花瓷"),
     ("小机，液泡是干什么的？", "液泡是干什么的"),
     ("你好小吉，讲简单点", "讲简单点"),
     ("嗨，小吉你好", "你好"),
@@ -33,7 +33,7 @@ def test_strip_wake_finds_wake_word(heard, rest):
     assert strip_wake(heard) == rest
 
 
-@pytest.mark.parametrize("heard", ["你好", "带我去看地球仪", "小心", "吉祥如意", "小朋友",
+@pytest.mark.parametrize("heard", ["你好", "带我去看青花瓷", "小心", "吉祥如意", "小朋友",
                                    "这个小机器人真可爱", "小机器人你好", "我家小鸡会唱歌"])
 def test_strip_wake_ignores_other_speech(heard):
     assert strip_wake(heard) is None
@@ -54,7 +54,7 @@ def queued(engine):
 def test_asleep_engine_ignores_speech_without_wake_word():
     engine, log = make_engine()
     assert engine.state == "sleeping"
-    engine.handle_heard("带我去看地球仪")
+    engine.handle_heard("带我去看青花瓷")
     assert queued(engine) == [] and any("待唤醒" in t for _, t in log)
 
 
@@ -63,14 +63,14 @@ def test_wake_word_alone_answers_immediately_then_stays_awake():
     engine.handle_heard("你好小吉")
     assert queued(engine) == []
     assert ("reply_chunk", "我在，请说。") in log
-    engine.handle_heard("带我去看地球仪")      # no wake word needed while awake
-    assert queued(engine) == ["带我去看地球仪"]
+    engine.handle_heard("带我去看青花瓷")      # no wake word needed while awake
+    assert queued(engine) == ["带我去看青花瓷"]
 
 
 def test_wake_word_with_command_runs_the_command():
     engine, _ = make_engine()
-    engine.handle_heard("小吉，带我去看地球仪")
-    assert queued(engine) == ["带我去看地球仪"]
+    engine.handle_heard("小吉，带我去看青花瓷")
+    assert queued(engine) == ["带我去看青花瓷"]
 
 
 def test_session_times_out_and_goodbye_puts_it_to_sleep():
@@ -103,8 +103,8 @@ def test_robot_walking_keeps_session_awake():
 def test_without_wake_word_everything_is_heard():
     engine, _ = make_engine(wake=False)
     assert engine.state != "sleeping"
-    engine.handle_heard("带我去看地球仪")
-    assert queued(engine) == ["带我去看地球仪"]
+    engine.handle_heard("带我去看青花瓷")
+    assert queued(engine) == ["带我去看青花瓷"]
 
 
 def test_typed_text_wakes_the_session():
@@ -196,7 +196,7 @@ def test_offline_arrival_length_follows_audience():
 
 
 @pytest.mark.parametrize("chunks, spoken", [
-    (["[风格：普通模式，幽默3/10]", "\n\n", "地球仪", "是斜的。"], "地球仪是斜的。"),
+    (["[风格：普通模式，幽默3/10]", "\n\n", "青花瓷", "是蓝的。"], "青花瓷是蓝的。"),
     (["[风", "格：儿童模式，幽默", "3/10] 你知道吗？"], "你知道吗？"),
     (["你好", "呀"], "你好呀"),
     (["[系统] 保留"], "[系统] 保留"),

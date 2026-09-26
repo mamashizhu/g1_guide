@@ -20,7 +20,8 @@ _PUNCT = re.compile(r"[\s，。？！、,.?!：:；;“”\"'（）()]")
 _CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 
 CONTEXT_BONUS = 0.1   # head start for the exhibit being talked about
-FAQ_THRESHOLD = 0.12  # TF-IDF cosine; unrelated questions score below 0.1 on our FAQ set
+FAQ_THRESHOLD = 0.15  # TF-IDF cosine; on the gallery FAQ set unrelated questions score <= 0.13,
+                      # real questions >= 0.28
 STOP_WORDS = ("停", "等一下", "等等", "别走", "站住", "先别", "暂停")
 GOTO_WORDS = ("带我", "去", "领我", "走", "想看", "看看", "参观")
 NEXT_WORDS = ("下一个", "下一站", "下一件", "接下来")
@@ -38,6 +39,8 @@ SERIOUS_WORDS = ("严肃点", "严肃一点", "正经点", "正经一点", "别�
 INTRO_SENTENCES = {"child": 2, "normal": 4, "expert": 99}  # how much of the intro to read out
 INTRO_WORDS = ("介绍", "讲讲", "讲一下", "说说", "是什么")
 LOCATE_WORDS = ("在哪", "怎么走", "怎么去", "在什么地方")
+# "原画在哪里" / "在哪里画的" ask about the artwork's history, not the way to the exhibit.
+ORIGIN_WORDS = ("原画", "原作", "真迹", "哪里画", "在哪画", "收藏在")
 INTEREST_WORDS = ("感兴趣", "喜欢", "想了解", "想知道", "有意思")
 YES_WORDS = ("好", "可以", "行", "走吧", "去吧", "嗯", "要", "是的", "对")
 NO_WORDS = ("不", "算了", "不用", "别")
@@ -184,7 +187,7 @@ class RuleBackend:
             return self._goto(target)
         if exhibit and _has(norm, GOTO_WORDS) and not _has(norm, ("为什么", "怎么", "什么")):
             return self._goto(exhibit)
-        if exhibit and _has(norm, LOCATE_WORDS):
+        if exhibit and _has(norm, LOCATE_WORDS) and not _has(norm, ORIGIN_WORDS):
             self.offer = exhibit
             return f"{exhibit.title}就在展厅里，要我带你过去吗？", []
         if exhibit and _has(norm, INTEREST_WORDS):
@@ -197,7 +200,7 @@ class RuleBackend:
             names = "、".join(e.title for e in self.exhibits)
             return f"这里一共有{len(self.exhibits)}件展品：{names}。你想先看哪一件？", []
         if _has(norm, WHO_WORDS):
-            return "我是科技馆的导览机器人小吉，可以带你参观展品、给你讲解。", []
+            return "我是美术馆的导览机器人小吉，可以带你参观展品、给你讲解。", []
         if _has(norm, BYE_WORDS):
             return "谢谢你的参观，欢迎下次再来，再见！", [self._call("gesture", {"name": "wave"})]
         if _has(norm, GREET_WORDS) and len(norm) <= 6:
@@ -218,7 +221,7 @@ class RuleBackend:
 
     def _answer(self, norm: str, exhibit: Exhibit | None) -> tuple[str, list[ToolCall]]:
         # Search every FAQ; the exhibit named in the question (or the one we stand at) gets a
-        # head start, but a clearly better match elsewhere still wins ("阳光到地球" is not the globe).
+        # head start, but a clearly better match elsewhere still wins ("普鲁士蓝" belongs to the wave print).
         hit = self.faq.search(norm, focus=exhibit or self.current)
         if hit and hit[0] >= FAQ_THRESHOLD:
             _, best_exhibit, answer = hit
@@ -230,7 +233,7 @@ class RuleBackend:
         if exhibit:
             self.current = exhibit
             return f"关于{exhibit.title}，这个问题我不太确定。你可以问问它的原理、用途，或者让我带你去看看。", []
-        return "抱歉，我现在网络不太好，只能回答展品相关的问题。你可以说“有什么展品”，或者“带我去看地球仪”。", []
+        return "抱歉，我现在网络不太好，只能回答展品相关的问题。你可以说“有什么展品”，或者“带我去看星月夜”。", []
 
     def _restyle(self, norm: str) -> tuple[str, list[ToolCall]] | None:
         change, reply = {}, ""

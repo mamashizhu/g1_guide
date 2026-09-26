@@ -78,14 +78,15 @@ def test_posters_have_absolute_pbr_plane_and_backboard_collision():
         assert uri.endswith(f"/posters/{exhibit['asset']}")
 
 
-def test_book_and_globe_are_non_box_models_with_matching_collision_geometry():
+def test_book_and_vase_are_non_box_models_with_matching_collision_geometry():
     sdf = generate_world(deepcopy(CONFIG), _assets())
     world = ET.fromstring(sdf).find("world")
-    book = world.find("model[@name='exhibit_book']")
-    globe = world.find("model[@name='exhibit_globe']")
+    book = world.find("model[@name='exhibit_painting_manual']")
+    vase = world.find("model[@name='exhibit_blue_white_vase']")
     assert book is not None and book.find("link/visual[@name='book_pages_left_visual']") is not None
-    assert globe is not None and globe.find("link/visual[@name='globe_sphere_visual']/geometry/sphere") is not None
-    for model in (book, globe):
+    assert vase is not None and vase.find("link/visual[@name='body_visual']/geometry/sphere") is not None
+    assert vase.find("link/visual[@name='neck_visual']/geometry/cylinder") is not None
+    for model in (book, vase):
         visuals = {node.attrib["name"].removesuffix("_visual"): node.find("geometry")
                    for node in model.findall("link/visual")}
         collisions = {node.attrib["name"].removesuffix("_collision"): node.find("geometry")

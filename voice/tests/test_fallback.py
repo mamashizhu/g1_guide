@@ -29,14 +29,15 @@ def goto_target(calls):
 # ---------------- rule brain: navigation ----------------
 
 @pytest.mark.parametrize("text, target", [
-    ("带我去看地球仪", "E06"),
-    ("带我去看的球仪吧", "E06"),          # ASR homophone error seen in testing
-    ("我想看看植物细胞", "E03"),
+    ("带我去看青花瓷", "E06"),
+    ("带我去看青花词吧", "E06"),          # one wrong character (ASR homophone)
+    ("我想看看星月夜", "E03"),
     ("去三号展品", "E03"),
     ("带我去第五个", "E05"),
-    ("我想去看那个电路的海报", "E02"),
-    ("带我去看太阳和地球", "E01"),        # must not pick E06 because of 地球
-    ("领我去看二进制", "E04"),
+    ("我想去看那幅千里江山图", "E02"),
+    ("领我去看青绿山水", "E02"),          # 青绿 must not drift to 青花 (E06)
+    ("带我去看画着富士山的那幅", "E04"),
+    ("带我去看清明上河图", "E01"),
 ])
 def test_goto_intents(text, target):
     reply, calls = ask(RuleBackend(EXHIBITS), text)
@@ -51,7 +52,7 @@ def test_stop_intent():
 
 def test_continue_resumes_last_goal_and_next_follows_recommendation():
     brain = RuleBackend(EXHIBITS)
-    ask(brain, "带我去看地球仪")
+    ask(brain, "带我去看青花瓷")
     ask(brain, "停一下")
     _, calls = ask(brain, "好了继续走吧")
     assert goto_target(calls) == ["E06"]
@@ -61,19 +62,19 @@ def test_continue_resumes_last_goal_and_next_follows_recommendation():
 
 
 def test_question_about_exhibit_is_not_navigation():
-    reply, calls = ask(RuleBackend(EXHIBITS), "地球仪为什么是斜的")
-    assert calls == [] and "23.5" in reply
+    reply, calls = ask(RuleBackend(EXHIBITS), "青花瓷是怎么烧出来的")
+    assert calls == [] and "高温" in reply
 
 
 # ---------------- rule brain: answers ----------------
 
 @pytest.mark.parametrize("question, expected", [
-    ("阳光到地球要多久", "8 分 20 秒"),
-    ("欧姆定律是什么", "I = U / R"),
-    ("液泡是干什么的", "储存水分"),
-    ("01001000是什么意思", "H"),
-    ("活字印刷是谁发明的", "毕昇"),
-    ("地球上海洋占多少", "71%"),
+    ("清明上河图画的是哪里", "开封"),
+    ("千里江山图的作者画画时多大", "十八岁"),
+    ("梵高是在哪里画的星月夜", "圣雷米"),
+    ("浮世绘是什么", "江户时代"),
+    ("芥子园是什么意思", "李渔"),
+    ("什么是釉下彩", "釉层"),
 ])
 def test_faq_answers(question, expected):
     reply, _ = ask(RuleBackend(EXHIBITS), question)
@@ -83,22 +84,22 @@ def test_faq_answers(question, expected):
 def test_context_follows_current_exhibit():
     brain = RuleBackend(EXHIBITS)
     ask(brain, event_message("arrived", EXHIBITS[2]))
-    reply, _ = ask(brain, "它的细胞壁有什么用")
-    assert "支撑" in reply
+    reply, _ = ask(brain, "天空为什么是一圈一圈的")
+    assert "笔触" in reply
 
 
 def test_arrival_gives_intro_recommendation_and_gesture():
     reply, calls = ask(RuleBackend(EXHIBITS), event_message("arrived", EXHIBITS[0]))
-    assert reply.startswith("我们到了") and "日地系统" in reply and "推荐" in reply
+    assert reply.startswith("我们到了") and "清明上河图" in reply and "推荐" in reply
     assert [(c.name, c.args) for c in calls] == [("gesture", {"name": "present", "exhibit_id": "E01"})]
 
 
 def test_interest_offer_then_yes_navigates():
     brain = RuleBackend(EXHIBITS)
-    reply, calls = ask(brain, "我对地理比较感兴趣")
+    reply, calls = ask(brain, "我对浮世绘比较感兴趣")
     assert calls == [] and "带你过去" in reply
-    assert goto_target(ask(brain, "好啊")[1]) == ["E06"]
-    ask(brain, "那个细胞海报在哪")
+    assert goto_target(ask(brain, "好啊")[1]) == ["E04"]
+    ask(brain, "那个瓷瓶在哪")
     assert ask(brain, "不用了")[1] == []
 
 
@@ -107,14 +108,15 @@ def test_polite_question_form_still_navigates():
 
 
 def test_named_exhibit_breaks_generic_ties():
-    assert "限制电流" in ask(RuleBackend(EXHIBITS), "电阻有什么用")[0]
+    # Three paintings share the question 原画在哪里; the name picks the right answer.
+    assert "纽约" in ask(RuleBackend(EXHIBITS), "星月夜的原画在哪里")[0]
 
 
 def test_context_does_not_make_noise_relevant():
     brain = RuleBackend(EXHIBITS)
     ask(brain, event_message("arrived", EXHIBITS[2]))
     for text in ("这个展馆有多大", "量子纠缠是怎么回事", "我饿了"):
-        assert "细胞" not in ask(brain, text)[0]
+        assert "梵高" not in ask(brain, text)[0]
 
 
 def test_unknown_question_admits_uncertainty():
@@ -126,14 +128,14 @@ def test_list_greet_bye_repeat():
     brain = RuleBackend(EXHIBITS)
     assert "6件展品" in ask(brain, "这里有什么展品")[0]
     assert "小吉" in ask(brain, "你好")[0]
-    first = ask(brain, "液泡是干什么的")[0]
+    first = ask(brain, "浮世绘是什么")[0]
     assert ask(brain, "没听清，再说一遍")[0] == first
     assert "再见" in ask(brain, "拜拜")[0]
 
 
 def test_overlap_measures_bigram_share():
-    assert overlap("地球仪", "这是地球仪") == 1.0
-    assert overlap("你好", "地球仪") == 0.0
+    assert overlap("青花瓷", "这是青花瓷") == 1.0
+    assert overlap("你好", "青花瓷") == 0.0
 
 
 # ---------------- resilient backend ----------------
@@ -156,15 +158,15 @@ class Broken:
 def test_llm_failure_falls_back_and_cools_down():
     primary = Broken()
     backend = ResilientBackend(primary, RuleBackend(EXHIBITS), log=lambda _: None)
-    reply, calls = ask(backend, "带我去看地球仪")
+    reply, calls = ask(backend, "带我去看青花瓷")
     assert goto_target(calls) == ["E06"] and not backend.online
-    ask(backend, "液泡是干什么的")
+    ask(backend, "浮世绘是什么")
     assert primary.calls == 1  # second turn skipped the dead LLM
 
 
 def test_failure_after_partial_reply_apologises_instead_of_repeating():
     backend = ResilientBackend(Broken(partial="好的，"), RuleBackend(EXHIBITS), log=lambda _: None)
-    reply, calls = ask(backend, "带我去看地球仪")
+    reply, calls = ask(backend, "带我去看青花瓷")
     assert reply == "好的，……抱歉，网络断了一下。" and calls == []
 
 
@@ -207,7 +209,7 @@ def test_dialog_with_rule_brain_drives_robot():
 
     robot = Robot()
     dialog = GuideDialog(RuleBackend(EXHIBITS), robot, log=lambda _: None)
-    assert "请跟我来" in dialog.turn("带我去看书籍", lambda _: None)
+    assert "请跟我来" in dialog.turn("带我去看芥子园", lambda _: None)
     assert robot.goals == ["E05"]
 
 
@@ -225,18 +227,18 @@ def make_engine():
 
 def test_echo_filter_uses_recent_robot_words():
     engine, _ = make_engine()
-    engine.speaker.recent_text = lambda window=4.0: "我们到了，这就是地球仪。地球仪的轴是倾斜的。"
-    assert engine.is_echo("这就是地球仪")
-    assert engine.is_echo("地球仪的轴是倾斜")
-    assert not engine.is_echo("带我去看植物细胞")
+    engine.speaker.recent_text = lambda window=4.0: "我们到了，这就是青花瓷瓶。青花是画在釉下面的。"
+    assert engine.is_echo("这就是青花瓷瓶")
+    assert engine.is_echo("青花是画在釉下面")
+    assert not engine.is_echo("带我去看星月夜")
 
 
 def test_engine_runs_turns_and_interrupt_cancels_stream():
     engine, log = make_engine()
     engine.start()
-    engine.submit_text("带我去看地球仪")
+    engine.submit_text("带我去看青花瓷")
     engine.wait_idle()
-    assert ("user", "带我去看地球仪") in log
+    assert ("user", "带我去看青花瓷") in log
     assert any(k == "reply_chunk" and "请跟我来" in t for k, t in log)
 
     gate = threading.Event()

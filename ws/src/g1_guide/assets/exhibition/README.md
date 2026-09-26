@@ -1,29 +1,23 @@
-# Exhibition poster assets
+# 展馆贴图
 
-`posters/E01.png` through `posters/E04.png` are deterministic, original
-scientific schematic posters for the F01 exhibition scene. Each PNG is RGB,
-768×512 pixels, and is generated from Pillow geometry and text only—there are
-no downloaded or copyrighted image inputs.
+`posters/E01.png`～`E04.png` 是美术馆墙上四幅名画的贴图：深色展板、画框（国画配绫边木框，西画配金框）、投影和说明牌，
+画作按原始比例居中，不拉伸、不裁掉主体。每张 1536×1024（3:2），对应世界里 2.4m×1.6m 的画板平面。
 
-Regenerate the posters from the repository root with:
+原画在 `paintings_src/`，来源和许可见 `paintings_src/SOURCES.md`（均为公有领域）。
+
+重新生成（在 WSL 里运行，用系统自带的 Droid Sans Fallback 中文字体）：
 
 ```bash
-python3 g1_ws/src/g1_guide/scripts/generate_exhibit_assets.py \
-  --output-dir g1_ws/src/g1_guide/assets/exhibition/posters
+python3 ws/src/g1_guide/scripts/frame_paintings.py
 ```
 
-The generator has no ROS dependency. `generate_assets(output_dir: Path)` is
-the programmatic API used by `test/test_exhibit_assets.py`; invoking it again
-with the same Pillow/font environment produces byte-for-byte identical files.
-
-| File | Topic | Visual language |
+| 文件 | 作品 | 画框 |
 | --- | --- | --- |
-| E01.png | Solar system | Orbits, sunlight arrow, Earth and Moon |
-| E02.png | Circuits and energy | Battery, closed wires, resistor and lamp |
-| E03.png | Plant cell | Cell wall, nucleus, vacuole and chloroplasts |
-| E04.png | Information and coding | Binary stream, code modules and signal wave |
+| E01.png | 张择端《清明上河图》（局部，虹桥） | 绫边木框 |
+| E02.png | 王希孟《千里江山图》（局部，开卷主峰） | 绫边木框 |
+| E03.png | 梵高《星月夜》 | 金框 |
+| E04.png | 葛饰北斋《神奈川冲浪里》 | 金框 |
 
-E04 keeps its signal wave in the diagram band below the header, gives the
-13×13 code-module grid a wide white container, and wraps the small
-`pattern → meaning` caption inside the decode panel. The coordinate anchors
-are public constants in the generator and are covered by the asset tests.
+说明牌文字只用中文和全角标点，年份写成中文数字：Droid Sans Fallback 没有阿拉伯数字和「·」。
+
+改之前的科普海报（日地系统、电路、植物细胞、编码）和生成脚本保存在 git 标签 `hall-science-v1`。

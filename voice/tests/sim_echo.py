@@ -30,7 +30,7 @@ from engine import GuideEngine  # noqa: E402
 from tts import OfflineEngine, Speaker  # noqa: E402
 
 RNG = np.random.default_rng(1)
-VISITOR = "等一下，带我去看植物细胞。"
+VISITOR = "等一下，带我去看星月夜。"
 
 
 def resample(x: np.ndarray, src: int, dst: int = SAMPLE_RATE) -> np.ndarray:

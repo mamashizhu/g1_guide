@@ -17,8 +17,8 @@ tts = OfflineEngine()
 def speech(text, gain=1.0):
     x = tts.synthesize(text); n = int(len(x)*SAMPLE_RATE/tts.sample_rate)
     return (np.interp(np.linspace(0,len(x)-1,n), np.arange(len(x)), x)*gain).astype(np.float32)
-ROBOT = "我们到了，这就是地球仪。地球仪的轴是倾斜的，和竖直方向大约差二十三点五度，正是这个倾斜带来了四季变化。"
-USER = "等一下，带我去看植物细胞。"
+ROBOT = "我们到了，这就是青花瓷瓶。工匠先用含氧化钴的颜料在瓷坯上画花纹，再罩上透明釉，用一千三百度左右的高温一次烧成。"
+USER = "等一下，带我去看星月夜。"
 robot_audio = speech(ROBOT, 0.5)             # echo is quieter than a visitor right at the mic
 user_audio = speech(USER, 1.0)
 rng = np.random.default_rng(0)

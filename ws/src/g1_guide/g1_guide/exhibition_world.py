@@ -20,8 +20,9 @@ _EPSILON = 1.0e-9
 _FLOOR_THICKNESS = 0.10
 _STATION_MARKER_RADIUS = 0.45
 _POSTER_KINDS = {"poster"}
-_SOLID_KINDS = {"book", "globe"}
+_SOLID_KINDS = {"book", "vase"}
 _PERSON_KINDS = {"static", "actor"}
+_PLINTH_COLOR = (0.86, 0.84, 0.80, 1.0)  # off-white museum plinth
 _SUPPORTED_SCHEMAS = (1, 2)
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RESERVED_MODEL_NAMES = {"floor", "wall_north", "wall_south", "wall_east",
@@ -172,7 +173,7 @@ def validate_layout(config: dict) -> None:
         model_names.add(model_name)
         kind = _text(exhibit.get("kind"), f"{path}.kind")
         if kind not in _POSTER_KINDS | _SOLID_KINDS:
-            _fail(f"{path}.kind", "must be poster, book, or globe")
+            _fail(f"{path}.kind", "must be poster, book, or vase")
         if kind in _POSTER_KINDS:
             posters += 1
             asset = _text(exhibit.get("asset"), f"{path}.asset")
@@ -412,20 +413,21 @@ def _book_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
     # Every visible primitive has an identical collision primitive.  The
     # split covers and pages make this unmistakably an open book, while the
     # low pedestal keeps the exhibit stable without hiding the book geometry.
+    # Indigo covers and aged paper read as a thread-bound Chinese album.
     top = float(exhibit["size"][2]) / 2.0
     components = [
         ("pedestal", _geometry_box(exhibit["size"]), (0.0, 0.0, 0.0),
-         _material((0.25, 0.10, 0.035, 1.0))),
+         _material(_PLINTH_COLOR)),
         ("book_cover_left", _geometry_box((0.56, 0.78, 0.07)), (-0.28, 0.0, top + 0.085, 0.0, -0.18, 0.0),
-         _material((0.50, 0.08, 0.05, 1.0))),
+         _material((0.12, 0.16, 0.30, 1.0))),
         ("book_cover_right", _geometry_box((0.56, 0.78, 0.07)), (0.28, 0.0, top + 0.085, 0.0, 0.18, 0.0),
-         _material((0.50, 0.08, 0.05, 1.0))),
+         _material((0.12, 0.16, 0.30, 1.0))),
         ("book_pages_left", _geometry_box((0.51, 0.70, 0.12)), (-0.25, 0.0, top + 0.19, 0.0, -0.18, 0.0),
-         _material((0.92, 0.84, 0.60, 1.0))),
+         _material((0.90, 0.84, 0.68, 1.0))),
         ("book_pages_right", _geometry_box((0.51, 0.70, 0.12)), (0.25, 0.0, top + 0.19, 0.0, 0.18, 0.0),
-         _material((0.92, 0.84, 0.60, 1.0))),
+         _material((0.90, 0.84, 0.68, 1.0))),
         ("book_spine", _geometry_box((0.10, 0.76, 0.09)), (0.0, 0.0, top + 0.14),
-         _material((0.35, 0.04, 0.03, 1.0))),
+         _material((0.08, 0.10, 0.20, 1.0))),
     ]
     pieces = []
     for name, geometry, local_pose, material in components:
@@ -436,32 +438,38 @@ def _book_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
                   f"<link name=\"link\">{''.join(pieces)}</link>")
 
 
-def _globe_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
+def _vase_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
+    """A blue-and-white porcelain vase (yuhuchun shape) on a wooden stand.
+
+    Built from spheres and cylinders like the rest of the hall, so it needs no
+    mesh files.  Blue bands and flower dots stand in for painted decoration;
+    everything stays inside the pedestal footprint with matching collision.
+    """
     top = float(exhibit["size"][2]) / 2.0
+    porcelain = _material((0.94, 0.95, 0.96, 1.0))
+    cobalt = _material((0.10, 0.20, 0.58, 1.0))
     components = [
-        ("pedestal", _geometry_box(exhibit["size"]), (0.0, 0.0, 0.0),
-         _material((0.12, 0.14, 0.18, 1.0))),
-        ("globe_stem", _geometry_cylinder(0.045, 0.40), (0.0, 0.0, top + 0.20),
-         _material((0.55, 0.58, 0.63, 1.0))),
-        ("globe_sphere", _geometry_sphere(0.28), (0.0, 0.0, top + 0.50),
-         _material((0.04, 0.24, 0.62, 1.0))),
-        ("globe_axis", _geometry_cylinder(0.018, 0.72), (0.0, 0.0, top + 0.50, 0.35, 0.0, 0.0),
-         _material((0.78, 0.80, 0.84, 1.0))),
-        ("equator", _geometry_cylinder(0.283, 0.006), (0.0, 0.0, top + 0.50),
-         _material((0.85, 0.85, 0.55, 1.0))),
+        ("pedestal", _geometry_box(exhibit["size"]), (0.0, 0.0, 0.0), _material(_PLINTH_COLOR)),
+        ("stand", _geometry_cylinder(0.16, 0.04), (0.0, 0.0, top + 0.02),
+         _material((0.22, 0.12, 0.06, 1.0))),
+        ("foot", _geometry_cylinder(0.10, 0.05), (0.0, 0.0, top + 0.065), porcelain),
+        ("body", _geometry_sphere(0.20), (0.0, 0.0, top + 0.27), porcelain),
+        ("shoulder", _geometry_sphere(0.09), (0.0, 0.0, top + 0.46), porcelain),
+        ("neck", _geometry_cylinder(0.05, 0.26), (0.0, 0.0, top + 0.56), porcelain),
+        ("mouth", _geometry_cylinder(0.085, 0.025), (0.0, 0.0, top + 0.70), porcelain),
+        ("band_equator", _geometry_cylinder(0.203, 0.03), (0.0, 0.0, top + 0.27), cobalt),
+        ("band_lower", _geometry_cylinder(0.156, 0.015), (0.0, 0.0, top + 0.14), cobalt),
+        ("band_upper", _geometry_cylinder(0.163, 0.015), (0.0, 0.0, top + 0.39), cobalt),
+        ("band_neck", _geometry_cylinder(0.053, 0.02), (0.0, 0.0, top + 0.62), cobalt),
+        ("band_rim", _geometry_cylinder(0.088, 0.008), (0.0, 0.0, top + 0.708), cobalt),
     ]
-    # Stylised land patches, not geographic data. All remain inside the
-    # pedestal footprint and carry identical collision and visible geometry.
-    for index, (longitude, latitude, radius) in enumerate([
-        (-115, 30, .075), (-100, 12, .07), (-85, -8, .065), (-78, -25, .055),
-        (-40, 38, .065), (-28, 20, .075), (70, 0, .08), (90, -18, .06),
-    ]):
-        lon, lat = math.radians(longitude), math.radians(latitude)
-        r = 0.25
-        components.append((f"land_{index}", _geometry_sphere(radius),
-                           (r * math.cos(lat) * math.cos(lon),
-                            r * math.cos(lat) * math.sin(lon), top + .50 + r * math.sin(lat)),
-                           _material((.13, .55, .22, 1))))
+    # Two staggered rings of flower dots above and below the equator band.
+    for ring, (dz, offset) in enumerate(((0.07, 0.0), (-0.07, math.pi / 8))):
+        for index in range(8):
+            angle = offset + index * math.pi / 4
+            components.append((f"flower_{ring}_{index}", _geometry_sphere(0.028),
+                               (0.18 * math.cos(angle), 0.18 * math.sin(angle), top + 0.27 + dz),
+                               cobalt))
     pieces = []
     for name, geometry, local_pose, material in components:
         if len(local_pose) == 3:
@@ -613,7 +621,7 @@ def generate_world(config: dict, asset_root: Path) -> str:
         elif kind == "book":
             model = _book_model(exhibit, position)
         else:
-            model = _globe_model(exhibit, position)
+            model = _vase_model(exhibit, position)
         lines.append("    " + model)
 
     for obstacle in root["obstacles"]:

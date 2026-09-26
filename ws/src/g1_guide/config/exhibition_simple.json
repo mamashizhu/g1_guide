@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
   "world_name": "exhibition",
-  "title": "知识与科学展馆",
+  "title": "古今名画美术馆",
   "room": {"width": 16.0, "depth": 12.0, "wall_height": 3.0, "wall_thickness": 0.15, "floor_top": 0.05},
   "robot_clearance_radius": 0.55,
   "spawn": {"x": 0.0, "y": -4.0, "z": 0.847, "yaw": 1.5707963267948966},
   "overview_camera": {"pose": [0.0, -10.0, 12.0, 0.0, 0.78, 1.5707963267948966]},
   "exhibits": [
-    {"exhibit_id": "E01", "model_name": "exhibit_solar_system", "kind": "poster", "title": "日地系统", "asset": "E01.png", "position": [-5.4, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "1", "x": -5.4, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E02", "model_name": "exhibit_electric_circuit", "kind": "poster", "title": "电路与能量", "asset": "E02.png", "position": [-1.8, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "2", "x": -1.8, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E03", "model_name": "exhibit_plant_cell", "kind": "poster", "title": "植物细胞", "asset": "E03.png", "position": [1.8, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "3", "x": 1.8, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E04", "model_name": "exhibit_information", "kind": "poster", "title": "信息与编码", "asset": "E04.png", "position": [5.4, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "4", "x": 5.4, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E05", "model_name": "exhibit_book", "kind": "book", "title": "书籍与知识传播", "position": [-4.0, 0.0, 0.5], "size": [1.4, 1.2, 0.9], "station": {"key": "5", "x": -4.0, "y": -1.9, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E06", "model_name": "exhibit_globe", "kind": "globe", "title": "地球仪与地理探索", "position": [4.0, 0.0, 0.5], "size": [1.4, 1.2, 0.9], "station": {"key": "6", "x": 4.0, "y": -1.9, "yaw": 1.5707963267948966}}
+    {"exhibit_id": "E01", "model_name": "exhibit_qingming", "kind": "poster", "title": "清明上河图", "asset": "E01.png", "position": [-5.4, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "1", "x": -5.4, "y": 3.7, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E02", "model_name": "exhibit_qianli_jiangshan", "kind": "poster", "title": "千里江山图", "asset": "E02.png", "position": [-1.8, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "2", "x": -1.8, "y": 3.7, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E03", "model_name": "exhibit_starry_night", "kind": "poster", "title": "星月夜", "asset": "E03.png", "position": [1.8, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "3", "x": 1.8, "y": 3.7, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E04", "model_name": "exhibit_great_wave", "kind": "poster", "title": "神奈川冲浪里", "asset": "E04.png", "position": [5.4, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "4", "x": 5.4, "y": 3.7, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E05", "model_name": "exhibit_painting_manual", "kind": "book", "title": "芥子园画传", "position": [-4.0, 0.0, 0.5], "size": [1.4, 1.2, 0.9], "station": {"key": "5", "x": -4.0, "y": -1.9, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E06", "model_name": "exhibit_blue_white_vase", "kind": "vase", "title": "青花瓷瓶", "position": [4.0, 0.0, 0.5], "size": [1.4, 1.2, 0.9], "station": {"key": "6", "x": 4.0, "y": -1.9, "yaw": 1.5707963267948966}}
   ],
   "obstacles": [
     {"name": "bench_west", "position": [-1.8, 0.0, 0.35], "size": [1.8, 0.65, 0.6], "color": [0.35, 0.19, 0.08, 1.0]},
