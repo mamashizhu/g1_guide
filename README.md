@@ -107,7 +107,6 @@ cd /mnt/d/g1_guide/ws/src/g1_guide && python3 -m pytest -q -p no:cacheprovider t
 SLAM 地图模式的完整流程与真机一致：先建图（`slam.launch.py lidar:=mid360 explore:=true`）→ 保存地图 → 用地图定位导航。
 简化雷达版建的地图里没有长椅、花盆（雷达扫不到），**不要用 `lidar:=simple` 的地图做 SLAM 地图导航**。
 
-## 工具
 ## 换真机时怎么用 SLAM
 
 仿真里日常用布局地图（`exhibition_nav.launch.py`）。真机没有布局文件、也没有精确里程计，按下面的顺序用 SLAM：
@@ -119,10 +118,11 @@ SLAM 地图模式的完整流程与真机一致：先建图（`slam.launch.py li
 
 仿真里验证过的数据：简单展馆 SLAM 建图墙体偏差 p95 0.06m，14 个物体全部建进地图；里程计漂 2.6m 时 AMCL 定位误差平均 0.05m。
 
+## 工具
 
 | 工具 | 用途 |
 |------|------|
 | `python tools/render_map.py maps/<地图>.yaml` | 把 SLAM 地图画成带展品框、展位箭头、米刻度的 PNG（Windows/WSL 均可） |
-| `wsl -u root -e bash tools/run_detached.sh …` | 用系统级 systemd 托管一条 ros2 命令（仍需一条 wsl 连接保持发行版不被关闭，见脚本注释） |
 | `bash tools/mem_probe.sh <秒> <间隔>` | 采样 Gazebo 进程内存并按堆/显卡映射/文件分类，排查内存泄漏 |
+| `wsl -u root -e bash tools/run_detached.sh …` | 用系统级 systemd 托管一条 ros2 命令（仍需一条 wsl 连接保持发行版不被关闭，见脚本注释） |
 

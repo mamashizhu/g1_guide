@@ -6,6 +6,8 @@ import heapq
 import math
 from typing import Any, Iterable, Mapping, Sequence
 
+from .scene_config import world_footprint
+
 
 _SQRT2 = math.sqrt(2.0)
 
@@ -26,17 +28,52 @@ def _point(value: Any) -> tuple[float, float] | None:
     return float(x), float(y)
 
 
-def _box(position: Any, size: Any) -> tuple[float, float, float, float] | None:
+def _box(position: Any, size: Any, yaw: Any = 0.0) -> tuple[float, float, float, float] | None:
     try:
         if len(position) < 2 or len(size) < 2:
             return None
         x, y = position[0], position[1]
-        sx, sy = size[0], size[1]
     except (TypeError, IndexError):
         return None
-    if not all(_finite_number(v) for v in (x, y, sx, sy)) or sx <= 0 or sy <= 0:
+    if not all(_finite_number(v) for v in (x, y)):
         return None
-    return float(x) - float(sx) / 2, float(y) - float(sy) / 2, float(x) + float(sx) / 2, float(y) + float(sy) / 2
+    extent = world_footprint({"size": size, "yaw": yaw})
+    if extent is None:
+        return None
+    sx, sy = extent
+    return float(x) - sx / 2, float(y) - sy / 2, float(x) + sx / 2, float(y) + sy / 2
+
+
+class _RectangleIndex:
+    """Uniform grid over static rectangles, expanded by the clearance radius.
+
+    The hall is described by a few hundred baked rectangles, so a linear scan
+    per query would dominate both grid construction and path smoothing.
+    """
+
+    def __init__(self, rectangles: Sequence[tuple[float, float, float, float]],
+                 clearance: float):
+        self._clearance = clearance
+        self._clearance2 = clearance * clearance
+        self._bucket = max(2.0 * clearance, 1.0)
+        buckets: dict[tuple[int, int], list[tuple[float, float, float, float]]] = {}
+        for rectangle in rectangles:
+            left, bottom, right, top = rectangle
+            for ix in range(math.floor((left - clearance) / self._bucket),
+                            math.floor((right + clearance) / self._bucket) + 1):
+                for iy in range(math.floor((bottom - clearance) / self._bucket),
+                                math.floor((top + clearance) / self._bucket) + 1):
+                    buckets.setdefault((ix, iy), []).append(rectangle)
+        self._buckets = buckets
+
+    def blocks(self, x: float, y: float) -> bool:
+        key = (math.floor(x / self._bucket), math.floor(y / self._bucket))
+        for left, bottom, right, top in self._buckets.get(key, ()):
+            dx = max(left - x, 0.0, x - right)
+            dy = max(bottom - y, 0.0, y - top)
+            if dx * dx + dy * dy <= self._clearance2 + 1e-12:
+                return True
+        return False
 
 
 class _DynamicPointIndex:
@@ -105,18 +142,24 @@ class OccupancyGrid:
         if self._nx * self._ny > 2_000_000:
             raise ValueError("resolution creates an impractically large occupancy grid")
 
+        # ``nav_obstacles`` carries the imported hall's walls, baked into
+        # rectangles offline; ``people`` contributes only its rigid visitors,
+        # since walking actors have no collision for the lidar to return.
         self._rectangles: list[tuple[float, float, float, float]] = []
-        for field in ("exhibits", "obstacles"):
+        for field in ("exhibits", "obstacles", "nav_obstacles", "people"):
             objects = config.get(field, ())
             if not isinstance(objects, Sequence) or isinstance(objects, (str, bytes)):
                 raise ValueError(f"config.{field} must be a sequence")
             for index, item in enumerate(objects):
                 if not isinstance(item, Mapping):
                     raise ValueError(f"config.{field}[{index}] must be a mapping")
-                rectangle = _box(item.get("position"), item.get("size"))
+                if field == "people" and item.get("kind") != "static":
+                    continue
+                rectangle = _box(item.get("position"), item.get("size"), item.get("yaw", 0.0))
                 if rectangle is None:
                     raise ValueError(f"config.{field}[{index}] needs finite position and positive size")
                 self._rectangles.append(rectangle)
+        self._index = _RectangleIndex(self._rectangles, self.clearance)
 
         self._blocked = {
             (ix, iy)
@@ -141,13 +184,7 @@ class OccupancyGrid:
     def _static_clear(self, x: float, y: float) -> bool:
         if not (self._xmin <= x <= self._xmax and self._ymin <= y <= self._ymax):
             return False
-        radius2 = self.clearance * self.clearance
-        for left, bottom, right, top in self._rectangles:
-            dx = max(left - x, 0.0, x - right)
-            dy = max(bottom - y, 0.0, y - top)
-            if dx * dx + dy * dy <= radius2 + 1e-12:
-                return False
-        return True
+        return not self._index.blocks(x, y)
 
     @staticmethod
     def _dynamic(dynamic_points: Iterable[Any]) -> tuple[tuple[float, float], ...] | None:

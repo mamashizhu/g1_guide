@@ -13,10 +13,11 @@ from launch_ros.actions import Node
 
 def _launch(context):
     from g1_guide.exhibition_world import generate_world
+    from g1_guide.scene_config import load_scene
 
     share = Path(get_package_share_directory("g1_guide"))
     config_path = Path(LaunchConfiguration("scene_config").perform(context))
-    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config = load_scene(config_path)
     # Each launch owns an isolated generated world; never overwrite user assets.
     output_dir = Path(tempfile.mkdtemp(prefix="g1-exhibition-"))
     world = output_dir / "exhibition.sdf"

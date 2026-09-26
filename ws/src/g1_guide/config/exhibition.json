@@ -1,23 +1,44 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "world_name": "exhibition",
   "title": "知识与科学展馆",
-  "room": {"width": 16.0, "depth": 12.0, "wall_height": 3.0, "wall_thickness": 0.15, "floor_top": 0.05},
+  "hall": {
+    "name": "exhibition_hall",
+    "model_uri": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/iscas_museum",
+    "pose": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    "note": "ISCAS museum mesh (CC-BY 4.0). Walls only: the floor below is generated here."
+  },
+  "nav_obstacles_file": "hall_nav_obstacles.json",
+  "room": {"width": 22.0, "depth": 24.0, "wall_height": 4.0, "wall_thickness": 0.02, "floor_top": 0.0},
   "robot_clearance_radius": 0.55,
-  "spawn": {"x": 0.0, "y": -4.0, "z": 0.847, "yaw": 1.5707963267948966},
-  "overview_camera": {"pose": [0.0, -10.0, 12.0, 0.0, 0.78, 1.5707963267948966]},
+  "spawn": {"x": 0.0, "y": -9.0, "z": 0.797, "yaw": 1.5707963267948966},
+  "overview_camera": {"pose": [0.4, -8.0, 16.0, 0.0, 0.85, 1.5707963267948966]},
   "exhibits": [
-    {"exhibit_id": "E01", "model_name": "exhibit_solar_system", "kind": "poster", "title": "日地系统", "asset": "E01.png", "position": [-5.4, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "1", "x": -5.4, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E02", "model_name": "exhibit_electric_circuit", "kind": "poster", "title": "电路与能量", "asset": "E02.png", "position": [-1.8, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "2", "x": -1.8, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E03", "model_name": "exhibit_plant_cell", "kind": "poster", "title": "植物细胞", "asset": "E03.png", "position": [1.8, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "3", "x": 1.8, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E04", "model_name": "exhibit_information", "kind": "poster", "title": "信息与编码", "asset": "E04.png", "position": [5.4, 5.78, 1.8], "size": [2.4, 0.10, 1.6], "station": {"key": "4", "x": 5.4, "y": 3.7, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E05", "model_name": "exhibit_book", "kind": "book", "title": "书籍与知识传播", "position": [-4.0, 0.0, 0.5], "size": [1.4, 1.2, 0.9], "station": {"key": "5", "x": -4.0, "y": -1.9, "yaw": 1.5707963267948966}},
-    {"exhibit_id": "E06", "model_name": "exhibit_globe", "kind": "globe", "title": "地球仪与地理探索", "position": [4.0, 0.0, 0.5], "size": [1.4, 1.2, 0.9], "station": {"key": "6", "x": 4.0, "y": -1.9, "yaw": 1.5707963267948966}}
+    {"exhibit_id": "E01", "model_name": "exhibit_solar_system", "kind": "poster", "title": "日地系统", "asset": "E01.png", "position": [-3.7, 10.95, 1.75], "size": [2.4, 0.1, 1.6], "yaw": 0.0, "station": {"key": "1", "x": -3.7, "y": 9.1, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E02", "model_name": "exhibit_electric_circuit", "kind": "poster", "title": "电路与能量", "asset": "E02.png", "position": [3.9, 10.95, 1.75], "size": [2.4, 0.1, 1.6], "yaw": 0.0, "station": {"key": "2", "x": 3.9, "y": 9.1, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E03", "model_name": "exhibit_plant_cell", "kind": "poster", "title": "植物细胞", "asset": "E03.png", "position": [-8.95, 9.1, 1.75], "size": [2.4, 0.1, 1.6], "yaw": 1.5707963267948966, "station": {"key": "3", "x": -7.1, "y": 9.1, "yaw": 3.141592653589793}},
+    {"exhibit_id": "E04", "model_name": "exhibit_information", "kind": "poster", "title": "信息与编码", "asset": "E04.png", "position": [0.7, -10.45, 1.75], "size": [2.4, 0.1, 1.6], "yaw": 3.141592653589793, "station": {"key": "4", "x": 0.7, "y": -8.6, "yaw": -1.5707963267948966}},
+    {"exhibit_id": "E05", "model_name": "exhibit_book", "kind": "book", "title": "书籍与知识传播", "position": [3.4, 7.0, 0.45], "size": [1.4, 1.2, 0.9], "yaw": 0.0, "station": {"key": "5", "x": 3.4, "y": 5.0, "yaw": 1.5707963267948966}},
+    {"exhibit_id": "E06", "model_name": "exhibit_globe", "kind": "globe", "title": "地球仪与地理探索", "position": [-5.1, -7.3, 0.45], "size": [1.4, 1.2, 0.9], "yaw": 0.0, "station": {"key": "6", "x": -3.2, "y": -7.3, "yaw": 3.141592653589793}}
   ],
-  "obstacles": [
-    {"name": "bench_west", "position": [-1.8, 0.0, 0.35], "size": [1.8, 0.65, 0.6], "color": [0.35, 0.19, 0.08, 1.0]},
-    {"name": "bench_east", "position": [1.8, 0.0, 0.35], "size": [1.8, 0.65, 0.6], "color": [0.35, 0.19, 0.08, 1.0]},
-    {"name": "planter_west", "position": [-6.5, -3.8, 0.55], "size": [0.8, 0.8, 1.0], "color": [0.16, 0.5, 0.26, 1.0]},
-    {"name": "planter_east", "position": [6.5, -3.8, 0.55], "size": [0.8, 0.8, 1.0], "color": [0.16, 0.5, 0.26, 1.0]}
+  "obstacles": [],
+  "people": [
+    {"name": "visitor_reading", "kind": "static", "title": "驻足参观者",
+     "model_uri": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Casual female",
+     "position": [5.5, 4.5], "yaw": 3.141592653589793, "size": [0.76, 0.33]},
+    {"name": "visitor_west", "kind": "static", "title": "西侧参观者",
+     "model_uri": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/FemaleVisitor",
+     "position": [-6.0, 5.0], "yaw": -1.5707963267948966, "size": [0.6, 0.45]},
+    {"name": "visitor_centre", "kind": "static", "title": "中庭参观者",
+     "model_uri": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/Standing person",
+     "position": [0.9, 5.6], "yaw": -1.5707963267948966, "size": [0.5, 0.4]},
+    {"name": "walker_gallery", "kind": "actor", "title": "北厅步行参观者",
+     "skin_uri": "https://fuel.gazebosim.org/1.0/openrobotics/models/malevisitorphone/1/files/meshes/MaleVisitorPhoneWalk.dae",
+     "speed": 0.9,
+     "waypoints": [[-4.0, 6.5], [4.6, 6.5], [4.6, 9.2], [-5.5, 9.2]]},
+    {"name": "walker_corridor", "kind": "actor", "title": "南廊步行参观者",
+     "skin_uri": "https://fuel.gazebosim.org/1.0/luca/models/femalevisitorwalk/1/files/meshes/FemaleVisitorWalk.dae",
+     "speed": 1.0,
+     "waypoints": [[-7.0, -6.9], [6.8, -6.9], [6.8, -7.7], [-7.0, -7.7]]}
   ]
 }

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import json
 import math
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -11,10 +10,11 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from g1_guide.exhibition_world import generate_world, validate_layout
+from g1_guide.scene_config import load_scene
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = json.loads((ROOT / "config/exhibition.json").read_text(encoding="utf-8"))
+CONFIG = load_scene(ROOT / "config/exhibition.json")
 
 
 def _assets() -> Path:
@@ -100,24 +100,36 @@ def test_book_and_globe_are_non_box_models_with_matching_collision_geometry():
     lambda c: c["exhibits"][0].update(size=[-1.0, 0.1, 1.6]),
     lambda c: c["exhibits"][1].update(exhibit_id=c["exhibits"][0]["exhibit_id"]),
     lambda c: c["exhibits"][1]["station"].update(key=c["exhibits"][0]["station"]["key"]),
-    lambda c: c["spawn"].update(x=8.0),
+    lambda c: c["spawn"].update(y=11.0),
     lambda c: c["exhibits"][0]["station"].update(x=-7.5),
-    lambda c: c["exhibits"][0]["station"].update(x=-4.0, y=5.6),
+    lambda c: c["exhibits"][0]["station"].update(y=10.6),
     lambda c: c.update(schema_version=True),
     lambda c: c["exhibits"][0].update(model_name="g1_glide"),
     lambda c: c["exhibits"][0].update(model_name="bad\"name"),
     lambda c: c["exhibits"][0].update(exhibit_id="../outside"),
     lambda c: c["exhibits"][0].update(model_name="station_6"),
-    lambda c: c["obstacles"][0].update(name=c["exhibits"][0]["model_name"]),
-    lambda c: c["obstacles"][0].update(name="floor"),
-    lambda c: c["obstacles"][0].update(position=[10, 0, .35]),
+    lambda c: c["people"][0].update(name=c["exhibits"][0]["model_name"]),
+    lambda c: c["people"][0].update(name="floor"),
+    lambda c: c["people"][0].update(position=[20, 0]),
     lambda c: c["exhibits"][4].update(position=[-4, 0, .6]),
     lambda c: c["exhibits"][4].update(size=[.5, 1.2, .9]),
     lambda c: c["exhibits"][0]["station"].update(key="front"),
     lambda c: c["exhibits"][0]["station"].update(key="7"),
     lambda c: c["exhibits"][5].update(position=c["exhibits"][4]["position"]),
-    lambda c: c["obstacles"][0].update(position=[-4, 0, .35]),
-    lambda c: c["obstacles"][1].update(position=c["obstacles"][0]["position"]),
+    lambda c: c["people"][0].update(position=c["exhibits"][4]["position"][:2]),
+    lambda c: c["people"][1].update(position=c["people"][0]["position"]),
+    lambda c: c["people"][0].update(kind="ghost"),
+    lambda c: c["people"][3].update(waypoints=[[0.0, 0.0]]),
+    lambda c: c["people"][3].update(speed=9.0),
+    # A space in an actor skin path hangs Gazebo rather than erroring.
+    lambda c: c["people"][3].update(
+        skin_uri="https://fuel.gazebosim.org/1.0/o/models/male%20visitor/1/files/m/w.dae"),
+    lambda c: c["people"][3].update(
+        skin_uri="https://fuel.gazebosim.org/1.0/o/models/male visitor/1/files/m/w.dae"),
+    lambda c: c["hall"].update(name="floor"),
+    lambda c: c["hall"].update(pose=[0, 0, 0]),
+    lambda c: c["exhibits"][0].update(yaw=float("nan")),
+    lambda c: c["nav_obstacles"][0].update(size=[0.0, 0.5]),
 ])
 def test_layout_rejects_invalid_or_unsafe_mutations(mutator):
     config = deepcopy(CONFIG)
@@ -132,17 +144,70 @@ def test_cli_arguments_are_not_needed_for_library_api():
     assert callable(generate_world)
 
 
-def test_every_sdf_pose_has_six_finite_values_and_walls_rest_on_floor():
+def test_every_sdf_pose_has_six_finite_values_and_hall_replaces_generated_walls():
     world = ET.fromstring(generate_world(deepcopy(CONFIG), _assets())).find("world")
     for pose in world.iter("pose"):
         values = [float(x) for x in pose.text.split()]
         assert len(values) == 6
         assert all(math.isfinite(x) for x in values)
+    # The imported mesh carries the walls, so none are generated alongside it.
+    for name in ("north", "south", "east", "west"):
+        assert world.find(f"model[@name='wall_{name}']") is None
+    hall = next(node for node in world.findall("include")
+                if node.findtext("name") == CONFIG["hall"]["name"])
+    assert hall.findtext("uri") == CONFIG["hall"]["model_uri"]
+    assert hall.findtext("static") == "true"
+    # The mesh has no floor of its own, so this world still supplies one.
+    floor = world.find("model[@name='floor']")
+    z = float(floor.findtext("pose").split()[2])
+    thickness = float(floor.findtext("link/collision/geometry/box/size").split()[2])
+    assert z + thickness / 2 == pytest.approx(CONFIG["room"]["floor_top"])
+
+
+def test_box_room_fallback_still_builds_walls_resting_on_the_floor():
+    config = deepcopy(CONFIG)
+    config.pop("hall")
+    world = ET.fromstring(generate_world(config, _assets())).find("world")
     for name in ("north", "south", "east", "west"):
         wall = world.find(f"model[@name='wall_{name}']")
         z = float(wall.findtext("pose").split()[2])
         height = float(wall.findtext("link/collision/geometry/box/size").split()[2])
-        assert z - height / 2 == pytest.approx(CONFIG["room"]["floor_top"])
+        assert z - height / 2 == pytest.approx(config["room"]["floor_top"])
+
+
+def test_static_visitors_are_collidable_includes_and_actors_loop_their_waypoints():
+    world = ET.fromstring(generate_world(deepcopy(CONFIG), _assets())).find("world")
+    people = {person["name"]: person for person in CONFIG["people"]}
+    assert sum(1 for p in people.values() if p["kind"] == "static") >= 2
+    assert sum(1 for p in people.values() if p["kind"] == "actor") >= 1
+
+    for name, person in people.items():
+        if person["kind"] == "static":
+            node = next(n for n in world.findall("include") if n.findtext("name") == name)
+            assert node.findtext("uri") == person["model_uri"]
+            # Static so the lidar gets a stable return instead of a ragdoll.
+            assert node.findtext("static") == "true"
+            x, y, z, _roll, _pitch, yaw = map(float, node.findtext("pose").split())
+            assert (x, y, z) == pytest.approx((*person["position"], 0.0))
+            assert yaw == pytest.approx(person.get("yaw", 0.0))
+            continue
+
+        actor = world.find(f"actor[@name='{name}']")
+        assert actor is not None
+        assert actor.findtext("skin/filename") == person["skin_uri"]
+        assert actor.findtext("script/loop") == "true"
+        waypoints = actor.findall("script/trajectory/waypoint")
+        # Closed loop: the first waypoint is repeated at the end.
+        assert len(waypoints) == len(person["waypoints"]) + 1
+        positions = [tuple(map(float, w.findtext("pose").split()))[:2] for w in waypoints]
+        assert positions[:-1] == [tuple(p) for p in person["waypoints"]]
+        assert positions[-1] == positions[0]
+        times = [float(w.findtext("time")) for w in waypoints]
+        assert times == sorted(times)
+        assert times[0] == 0.0
+        expected = sum(math.dist(positions[i], positions[i + 1])
+                       for i in range(len(positions) - 1)) / person["speed"]
+        assert times[-1] == pytest.approx(expected)
 
 
 @pytest.mark.parametrize("size", [[1.4, 1.2, .9], [1.2, 1.0, 1.1]])
@@ -184,8 +249,9 @@ def test_missing_poster_fails_explicitly(tmp_path):
 def test_additional_exhibit_uses_next_numeric_station_key():
     config = deepcopy(CONFIG)
     extra = deepcopy(config["exhibits"][0])
-    extra.update(exhibit_id="E07", model_name="exhibit_extra", position=[0, 5.78, 1.8], size=[.6, .1, 1.6])
-    extra["station"].update(key="7", x=0)
+    extra.update(exhibit_id="E07", model_name="exhibit_extra",
+                 position=[0.3, 10.95, 1.75], size=[.6, .1, 1.6], yaw=0.0)
+    extra["station"].update(key="7", x=0.3, y=9.1)
     config["exhibits"].append(extra)
     world = ET.fromstring(generate_world(config, _assets())).find("world")
     assert world.find("model[@name='station_7']") is not None

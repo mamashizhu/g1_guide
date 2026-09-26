@@ -13,12 +13,16 @@ import re
 from typing import Any, Mapping, Sequence
 from xml.sax.saxutils import escape
 
+from .scene_config import world_footprint
+
 
 _EPSILON = 1.0e-9
 _FLOOR_THICKNESS = 0.10
 _STATION_MARKER_RADIUS = 0.45
 _POSTER_KINDS = {"poster"}
 _SOLID_KINDS = {"book", "globe"}
+_PERSON_KINDS = {"static", "actor"}
+_SUPPORTED_SCHEMAS = (1, 2)
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RESERVED_MODEL_NAMES = {"floor", "wall_north", "wall_south", "wall_east",
                          "wall_west", "exhibition_overview", "g1_glide"}
@@ -71,10 +75,22 @@ def _mapping(value: Any, path: str) -> Mapping[str, Any]:
     return value
 
 
-def _rect(position: Sequence[float], size: Sequence[float]) -> tuple[float, float, float, float]:
-    half_x, half_y = size[0] / 2.0, size[1] / 2.0
+def _rect(position: Sequence[float], size: Sequence[float],
+          yaw: float = 0.0) -> tuple[float, float, float, float]:
+    """World-aligned bounds of a box centred on ``position`` and turned by ``yaw``."""
+    extent = world_footprint({"size": size, "yaw": yaw})
+    if extent is None:
+        raise ValueError("cannot compute a footprint for this size/yaw")
+    half_x, half_y = extent[0] / 2.0, extent[1] / 2.0
     return (position[0] - half_x, position[0] + half_x,
             position[1] - half_y, position[1] + half_y)
+
+
+def _angle(value: Any, path: str) -> float:
+    result = _number(value, path)
+    if abs(result) > 4.0 * math.pi:
+        _fail(path, "must be an angle in radians")
+    return result
 
 
 def _circle_intersects_rect(x: float, y: float, radius: float,
@@ -96,8 +112,9 @@ def validate_layout(config: dict) -> None:
     """
 
     root = _mapping(config, "config")
-    if type(root.get("schema_version")) is not int or root["schema_version"] != 1:
-        _fail("schema_version", "must be integer 1")
+    if type(root.get("schema_version")) is not int \
+            or root["schema_version"] not in _SUPPORTED_SCHEMAS:
+        _fail("schema_version", f"must be one of {_SUPPORTED_SCHEMAS}")
     room = _mapping(root.get("room"), "room")
     width = _number(room.get("width"), "room.width")
     depth = _number(room.get("depth"), "room.depth")
@@ -115,6 +132,17 @@ def validate_layout(config: dict) -> None:
     if world_name != "exhibition":
         _fail("world_name", "must be 'exhibition'")
 
+    model_names: set[str] = set(_RESERVED_MODEL_NAMES)
+    hall = root.get("hall")
+    if hall is not None:
+        hall = _mapping(hall, "hall")
+        hall_name = _identifier(hall.get("name"), "hall.name")
+        if hall_name in model_names:
+            _fail("hall.name", f"duplicate/reserved model name {hall_name!r}")
+        model_names.add(hall_name)
+        _text(hall.get("model_uri"), "hall.model_uri")
+        _vector(hall.get("pose"), 6, "hall.pose")
+
     spawn = _mapping(root.get("spawn"), "spawn")
     spawn_position = [_number(spawn.get(name), f"spawn.{name}")
                      for name in ("x", "y", "z", "yaw")]
@@ -126,9 +154,8 @@ def validate_layout(config: dict) -> None:
         _fail("exhibits", "must be a list")
     if len(exhibits_value) < 6:
         _fail("exhibits", "must contain at least six exhibits")
-    exhibits: list[tuple[Mapping[str, Any], list[float], list[float]]] = []
+    exhibits: list[tuple[Mapping[str, Any], list[float], list[float], float]] = []
     exhibit_ids: set[str] = set()
-    model_names: set[str] = set(_RESERVED_MODEL_NAMES)
     station_keys: set[str] = set()
     posters = 0
     solids = 0
@@ -156,6 +183,7 @@ def validate_layout(config: dict) -> None:
             solids += 1
         position = _vector(exhibit.get("position"), 3, f"{path}.position")
         size = _dimensions(exhibit.get("size"), f"{path}.size")
+        yaw = _angle(exhibit.get("yaw", 0.0), f"{path}.yaw")
         if kind in _SOLID_KINDS and (size[0] < 1.2 or size[1] < 1.0):
             _fail(f"{path}.size", "solid exhibit footprint must be at least 1.2 m x 1.0 m")
         if position[2] - size[2] / 2.0 < floor_top - _EPSILON:
@@ -169,8 +197,13 @@ def validate_layout(config: dict) -> None:
         station_keys.add(key)
         station_x = _number(station.get("x"), f"{path}.station.x")
         station_y = _number(station.get("y"), f"{path}.station.y")
-        _number(station.get("yaw"), f"{path}.station.yaw")
-        exhibits.append((exhibit, position, size))
+        station_yaw = _number(station.get("yaw"), f"{path}.station.yaw")
+        # A station that does not look at its exhibit would stop the robot
+        # with the artwork behind it, so the tour geometry is checked here.
+        facing = math.atan2(position[1] - station_y, position[0] - station_x)
+        if abs((facing - station_yaw + math.pi) % (2.0 * math.pi) - math.pi) > math.radians(12.0):
+            _fail(f"{path}.station.yaw", "does not face the exhibit")
+        exhibits.append((exhibit, position, size, yaw))
 
     if posters < 4:
         _fail("exhibits", "must contain at least four poster exhibits")
@@ -203,6 +236,52 @@ def validate_layout(config: dict) -> None:
             _fail(f"{path}.color", "components must be in [0, 1]")
         obstacles.append((obstacle, position, size))
 
+    # Visitors.  Static ones are rigid models the lidar sees, so they get a
+    # footprint and join the clearance checks; walking actors are animated
+    # skins without collision and are only checked for a sane path.
+    people_value = root.get("people", ())
+    if not isinstance(people_value, Sequence) or isinstance(people_value, (str, bytes)):
+        _fail("people", "must be a list")
+    people: list[tuple[Mapping[str, Any], list[float], list[float]]] = []
+    for index, raw_person in enumerate(people_value):
+        path = f"people[{index}]"
+        person = _mapping(raw_person, path)
+        name = _identifier(person.get("name"), f"{path}.name")
+        if name in model_names:
+            _fail(f"{path}.name", f"duplicate/reserved model name {name!r}")
+        model_names.add(name)
+        kind = _text(person.get("kind"), f"{path}.kind")
+        if kind not in _PERSON_KINDS:
+            _fail(f"{path}.kind", "must be static or actor")
+        if kind == "static":
+            _text(person.get("model_uri"), f"{path}.model_uri")
+            position = _vector(person.get("position"), 2, f"{path}.position")
+            _angle(person.get("yaw", 0.0), f"{path}.yaw")
+            size = _dimensions([*_vector(person.get("size"), 2, f"{path}.size"), 1.0],
+                               f"{path}.size")
+            people.append((person, position, size))
+        else:
+            skin = _text(person.get("skin_uri"), f"{path}.skin_uri")
+            # A Fuel path containing a space hangs Gazebo's mesh resolver
+            # instead of failing, which shows up as a world that never steps.
+            if " " in skin or "%20" in skin:
+                _fail(f"{path}.skin_uri", "must not contain spaces; pick a model "
+                                          "whose Fuel path has none")
+            speed = _number(person.get("speed", 1.0), f"{path}.speed")
+            if not 0.1 <= speed <= 3.0:
+                _fail(f"{path}.speed", "must be between 0.1 and 3.0 m/s")
+            waypoints = person.get("waypoints")
+            if not isinstance(waypoints, Sequence) or isinstance(waypoints, (str, bytes)) \
+                    or len(waypoints) < 2:
+                _fail(f"{path}.waypoints", "must contain at least two points")
+            previous = None
+            for step, raw_point in enumerate(waypoints):
+                point = _vector(raw_point, 2, f"{path}.waypoints[{step}]")
+                if previous is not None and math.dist(previous, point) < 0.5:
+                    _fail(f"{path}.waypoints[{step}]",
+                          "consecutive waypoints must be at least 0.5 m apart")
+                previous = point
+
     # Use the inner face of the wall as the navigable room boundary.  The
     # station/spawn circle must fit fully inside this boundary.
     inner_x = width / 2.0 - wall_thickness / 2.0
@@ -214,12 +293,33 @@ def validate_layout(config: dict) -> None:
         _fail("robot_clearance_radius", "does not fit inside the room")
     boundary = (-inner_x, inner_x, -inner_y, inner_y)
 
-    for object_name, rectangle in (
-        [(f"exhibits[{index}]", _rect(position, size))
-         for index, (_exhibit, position, size) in enumerate(exhibits)]
-        + [(f"obstacles[{index}]", _rect(position, size))
-           for index, (_obstacle, position, size) in enumerate(obstacles)]
-    ):
+    # Baked hall geometry: rectangles the planner must respect but that no
+    # model here draws, because the imported mesh already shows them.
+    nav_value = root.get("nav_obstacles", ())
+    if not isinstance(nav_value, Sequence) or isinstance(nav_value, (str, bytes)):
+        _fail("nav_obstacles", "must be a list")
+    hall_rectangles = []
+    for index, raw_nav in enumerate(nav_value):
+        path = f"nav_obstacles[{index}]"
+        nav = _mapping(raw_nav, path)
+        _text(nav.get("name"), f"{path}.name")
+        position = _vector(nav.get("position"), 2, f"{path}.position")
+        size = _vector(nav.get("size"), 2, f"{path}.size")
+        if any(item <= 0.0 for item in size):
+            _fail(f"{path}.size", "dimensions must be positive")
+        hall_rectangles.append((path, _rect(position, size)))
+
+    drawn_rectangles = [
+        (f"exhibits[{index}]", _rect(position, size, yaw))
+        for index, (_exhibit, position, size, yaw) in enumerate(exhibits)
+    ] + [
+        (f"obstacles[{index}]", _rect(position, size))
+        for index, (_obstacle, position, size) in enumerate(obstacles)
+    ] + [
+        (f"people[{index}]", _rect(position, size))
+        for index, (_person, position, size) in enumerate(people)
+    ]
+    for object_name, rectangle in drawn_rectangles:
         left, right, bottom, top = rectangle
         if left < boundary[0] or right > boundary[1] \
                 or bottom < boundary[2] or top > boundary[3]:
@@ -236,15 +336,11 @@ def validate_layout(config: dict) -> None:
     safety_points.extend(
         (f"exhibits[{index}].station", _number(exhibit["station"]["x"], "station.x"),
          _number(exhibit["station"]["y"], "station.y"))
-        for index, (exhibit, _position, _size) in enumerate(exhibits)
+        for index, (exhibit, _position, _size, _yaw) in enumerate(exhibits)
     )
-    object_rectangles = [
-        (f"exhibits[{index}]", _rect(position, size))
-        for index, (_exhibit, position, size) in enumerate(exhibits)
-    ] + [
-        (f"obstacles[{index}]", _rect(position, size))
-        for index, (_obstacle, position, size) in enumerate(obstacles)
-    ]
+    # Posters sit flush against hall walls on purpose, so the hall rectangles
+    # take part in the standing-room checks but not in the overlap test.
+    object_rectangles = drawn_rectangles
     for index, (name, rect) in enumerate(object_rectangles):
         for other_name, other in object_rectangles[index + 1:]:
             if min(rect[1], other[1]) > max(rect[0], other[0]) + _EPSILON \
@@ -254,7 +350,7 @@ def validate_layout(config: dict) -> None:
         if x - radius <= boundary[0] or x + radius >= boundary[1] \
                 or y - radius <= boundary[2] or y + radius >= boundary[3]:
             _fail(point_name, "clearance circle crosses the room boundary")
-        for object_name, rectangle in object_rectangles:
+        for object_name, rectangle in object_rectangles + hall_rectangles:
             if _circle_intersects_rect(x, y, radius, rectangle):
                 _fail(point_name, f"clearance circle intersects {object_name}")
 
@@ -375,8 +471,53 @@ def _globe_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
                   f"<link name=\"link\">{''.join(pieces)}</link>")
 
 
+def _hall_model(hall: Mapping[str, Any]) -> str:
+    """Include the imported hall mesh; it supplies the walls this world skips."""
+    return (f"<include><name>{escape(str(hall['name']))}</name>"
+            f"<uri>{escape(str(hall['model_uri']))}</uri>"
+            f"<pose>{_pose(hall['pose'])}</pose><static>true</static></include>")
+
+
+def _static_person_model(person: Mapping[str, Any]) -> str:
+    """A rigid visitor: collision included, so the lidar and planner see them."""
+    x, y = person["position"]
+    yaw = float(person.get("yaw", 0.0))
+    return (f"<include><name>{escape(str(person['name']))}</name>"
+            f"<uri>{escape(str(person['model_uri']))}</uri>"
+            f"<pose>{_pose((x, y, 0.0, 0.0, 0.0, yaw))}</pose>"
+            "<static>true</static></include>")
+
+
+def _actor_person(person: Mapping[str, Any]) -> str:
+    """A walking visitor: a skinned animation looping through its waypoints.
+
+    Actors carry no collision in Gazebo, so these are seen by the cameras but
+    not by the lidar; the static visitors are what the planner avoids.
+    """
+    skin = escape(str(person["skin_uri"]))
+    speed = float(person.get("speed", 1.0))
+    points = [(float(x), float(y)) for x, y in person["waypoints"]]
+    closed = points + [points[0]]
+    waypoints = []
+    time = 0.0
+    for index, (x, y) in enumerate(closed):
+        nxt = closed[(index + 1) % len(closed)]
+        heading = math.atan2(nxt[1] - y, nxt[0] - x)
+        waypoints.append(f"<waypoint><time>{_fmt(time)}</time>"
+                         f"<pose>{_pose((x, y, 0.0, 0.0, 0.0, heading))}</pose></waypoint>")
+        time += math.dist((x, y), nxt) / speed
+    return (f"<actor name=\"{escape(str(person['name']))}\">"
+            f"<skin><filename>{skin}</filename><scale>1.0</scale></skin>"
+            f"<animation name=\"walk\"><filename>{skin}</filename>"
+            "<scale>1.0</scale><interpolate_x>true</interpolate_x></animation>"
+            "<script><loop>true</loop><delay_start>0.0</delay_start>"
+            "<auto_start>true</auto_start>"
+            f"<trajectory id=\"0\" type=\"walk\">{''.join(waypoints)}</trajectory>"
+            "</script></actor>")
+
+
 def _poster_model(exhibit: Mapping[str, Any], position: Sequence[float],
-                  size: Sequence[float], asset_uri: str) -> str:
+                  size: Sequence[float], asset_uri: str, yaw: float = 0.0) -> str:
     board_geometry = _geometry_box(size)
     plane_size = (size[0], size[2])
     plane_y = -size[1] / 2.0 - 0.002
@@ -395,7 +536,7 @@ def _poster_model(exhibit: Mapping[str, Any], position: Sequence[float],
         f"{_material((0.18, 0.20, 0.24, 1.0))}</visual>"
     )
     return _model(
-        str(exhibit["model_name"]), (*position[:2], position[2], 0.0, 0.0, 0.0),
+        str(exhibit["model_name"]), (*position[:2], position[2], 0.0, 0.0, yaw),
         f"<link name=\"link\"><collision name=\"collision\">{board_geometry}</collision>"
         f"{backboard_visual}{poster_visual}</link>",
     )
@@ -443,16 +584,20 @@ def generate_world(config: dict, asset_root: Path) -> str:
     floor_size = (width, depth, _FLOOR_THICKNESS)
     lines.append("    " + _box_model("floor", (0.0, 0.0, floor_center), floor_size,
                                       _material((0.32, 0.34, 0.38, 1.0))))
-    wall_z = floor_top + wall_height / 2.0
-    walls = (
-        ("wall_north", (0.0, depth / 2.0, wall_z), (width, wall_thickness, wall_height)),
-        ("wall_south", (0.0, -depth / 2.0, wall_z), (width, wall_thickness, wall_height)),
-        ("wall_east", (width / 2.0, 0.0, wall_z), (wall_thickness, depth, wall_height)),
-        ("wall_west", (-width / 2.0, 0.0, wall_z), (wall_thickness, depth, wall_height)),
-    )
-    for name, position, size in walls:
-        lines.append("    " + _box_model(name, position, size,
-                                          _material((0.64, 0.67, 0.72, 1.0), ambient=False)))
+    hall = root.get("hall")
+    if hall is None:
+        wall_z = floor_top + wall_height / 2.0
+        walls = (
+            ("wall_north", (0.0, depth / 2.0, wall_z), (width, wall_thickness, wall_height)),
+            ("wall_south", (0.0, -depth / 2.0, wall_z), (width, wall_thickness, wall_height)),
+            ("wall_east", (width / 2.0, 0.0, wall_z), (wall_thickness, depth, wall_height)),
+            ("wall_west", (-width / 2.0, 0.0, wall_z), (wall_thickness, depth, wall_height)),
+        )
+        for name, position, size in walls:
+            lines.append("    " + _box_model(name, position, size,
+                                              _material((0.64, 0.67, 0.72, 1.0), ambient=False)))
+    else:
+        lines.append("    " + _hall_model(hall))
 
     for exhibit in root["exhibits"]:
         position = exhibit["position"]
@@ -463,7 +608,8 @@ def generate_world(config: dict, asset_root: Path) -> str:
             if not asset_path.is_file():
                 raise FileNotFoundError(f"poster asset does not exist: {asset_path}")
             asset_uri = asset_path.resolve().as_uri()
-            model = _poster_model(exhibit, position, size, asset_uri)
+            model = _poster_model(exhibit, position, size, asset_uri,
+                                  float(exhibit.get("yaw", 0.0)))
         elif kind == "book":
             model = _book_model(exhibit, position)
         else:
@@ -474,6 +620,10 @@ def generate_world(config: dict, asset_root: Path) -> str:
         color = obstacle.get("color", [0.45, 0.45, 0.48, 1.0])
         lines.append("    " + _box_model(str(obstacle["name"]), obstacle["position"],
                                           obstacle["size"], _material(color)))
+
+    for person in root.get("people", ()):
+        lines.append("    " + (_static_person_model(person) if person["kind"] == "static"
+                               else _actor_person(person)))
 
     # Station markers are intentionally visual-only: navigation targets must
     # not become extra collision obstacles.

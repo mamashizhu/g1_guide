@@ -8,3 +8,10 @@ voice/models/
 build/
 install/
 log/
+
+# Mesh probe cache and preview artefacts (regenerate with tools/hall/probe_museum.py)
+tools/hall/museum_points.npy
+tools/hall/exhibition_preview.sdf
+tools/hall/gzrun.log
+tools/hall/probe_*.sdf
+tools/hall/variant_*.sdf

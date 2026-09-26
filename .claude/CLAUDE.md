@@ -19,8 +19,8 @@ ros2 run g1_guide sensor_dashboard              # 传感器面板
 ros2 launch g1_guide lowlevel.launch.py         # 低阶关节控制（骨盆固定）
 ros2 launch g1_guide slam.launch.py explore:=true rviz:=true   # SLAM 自动巡航建图，地图存到 maps/
 ros2 launch g1_guide slam_nav.launch.py rviz:=true              # SLAM 地图导航（真机雷达 + 漂移 + AMCL）
-```
 gz sim                                          # 只开 Gazebo
+```
 
 ## 环境说明
 
@@ -95,10 +95,10 @@ bash /mnt/d/g1_guide/ws/build.sh
 - 用户要求**可视化验证**：每完成一项，给出用户能亲眼看到效果的命令和合格标准。
 - headless 模式（`headless:=true`）2026-09-25 实测新展馆实时率约 0.43，可以跑自动验收；看效果仍用图形窗口。
 - **Gazebo 渲染内存泄漏（WSL GPU 转译层）**：机器人静止时，新展馆图形窗口约 +21 MB/s、仿真主进程约 +8 MB/s（headless 约 +10 MB/s），简单展馆约 +4 / +1.4 MB/s。WSL 只有 7.5GB，新展馆开窗口约 3 分钟就会被 OOM 杀掉，WSL 服务也可能随之报 `E_UNEXPECTED`。长时间运行用 headless，或分段重启；排查看 `dmesg | grep -i oom`。
-
   - 2026-09-25 定位（`tools/mem_probe.sh`）：涨的全是进程堆内存；只开展馆不放机器人时主进程不涨、窗口照涨；改 `LIBGL_ALWAYS_SOFTWARE=1` 后两边都不涨 → 泄漏在 WSL 的 d3d12 显卡转译层，不是我们的代码。上游同类问题未修复：gazebosim/gz-sim#2873、PX4/PX4-Autopilot#27296。
   - 可用的折中（未接入 launch）：主进程用显卡 `headless:=true`，窗口另开 `LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe gz sim -g`，实测窗口不漏、实时率 0.44–0.48，只剩主进程约 8 MB/s。全部软件渲染实时率只有 0.005，不能用。
   - 用户决定（2026-09-25）：暂不处理泄漏，仿真日常直接用布局地图导航。
+
 ## 渲染配置
 
 - 当前使用 `ogre` 并关闭阴影（流畅优先）。恢复高画质：把 SDF 里的 `ogre` 改为 `ogre2`，`shadows` 改为 `true`。
