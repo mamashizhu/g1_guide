@@ -83,12 +83,21 @@ def test_book_and_vase_are_non_box_models_with_matching_collision_geometry():
     world = ET.fromstring(sdf).find("world")
     book = world.find("model[@name='exhibit_painting_manual']")
     vase = world.find("model[@name='exhibit_blue_white_vase']")
-    assert book is not None and book.find("link/visual[@name='book_pages_left_visual']") is not None
+    assert book is not None and book.find("link/visual[@name='cradle_board_visual']") is not None
     assert vase is not None and vase.find("link/visual[@name='body_visual']/geometry/sphere") is not None
     assert vase.find("link/visual[@name='neck_visual']/geometry/cylinder") is not None
+    # Printed pages are visual-only planes on top of solid page blocks.
+    prints = book.findall("link/visual[@name]")
+    prints = {node.attrib["name"]: node for node in prints if node.attrib["name"].endswith("_print")}
+    assert set(prints) == {"page_left_print", "page_right_print", "volume_cover_print"}
+    for node in prints.values():
+        assert node.find("geometry/plane") is not None
+        assert node.findtext("material/pbr/metal/albedo_map").startswith("file:///")
     for model in (book, vase):
+        assert all(c.find("geometry/plane") is None for c in model.findall("link/collision"))
         visuals = {node.attrib["name"].removesuffix("_visual"): node.find("geometry")
-                   for node in model.findall("link/visual")}
+                   for node in model.findall("link/visual")
+                   if not node.attrib["name"].endswith("_print")}
         collisions = {node.attrib["name"].removesuffix("_collision"): node.find("geometry")
                       for node in model.findall("link/collision")}
         assert set(visuals) == set(collisions)

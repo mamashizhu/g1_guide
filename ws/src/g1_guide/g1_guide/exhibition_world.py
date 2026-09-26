@@ -409,31 +409,70 @@ def _box_model(name: str, position: Sequence[float], size: Sequence[float],
     )
 
 
-def _book_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
-    # Every visible primitive has an identical collision primitive.  The
-    # split covers and pages make this unmistakably an open book, while the
-    # low pedestal keeps the exhibit stable without hiding the book geometry.
-    # Indigo covers and aged paper read as a thread-bound Chinese album.
+def _textured_plane(name: str, size: Sequence[float], pose: Sequence[float], uri: str) -> str:
+    """A visual-only printed surface.  Planes never get collision: a plane
+    collision in Gazebo is infinite, so the solid block underneath collides."""
+    return (f"<visual name=\"{escape(name)}_print\"><pose>{_pose(pose)}</pose>"
+            f"<geometry><plane><normal>0 0 1</normal><size>{_pose(size)}</size></plane></geometry>"
+            "<material><ambient>1 1 1 1</ambient><diffuse>1 1 1 1</diffuse><pbr><metal>"
+            "<metalness>0</metalness><roughness>1</roughness>"
+            f"<albedo_map>{escape(uri)}</albedo_map></metal></pbr></material></visual>")
+
+
+def _book_model(exhibit: Mapping[str, Any], position: Sequence[float], textures: Path) -> str:
+    """An open thread-bound album on a tilted wooden cradle, plus closed volumes.
+
+    Modelled on how museums show woodblock books: pages nearly flat, paper a
+    few centimetres thick, printed pages from a real scan.  The viewer stands
+    on the -y side, so the cradle rises towards +y.  Page and cover textures
+    are ``<exhibit_id>_left/_right/_cover.png`` in the posters directory.
+    """
+    exhibit_id = str(exhibit["exhibit_id"])
+    uris = {}
+    for part in ("left", "right", "cover"):
+        path = textures / f"{exhibit_id}_{part}.png"
+        if not path.is_file():
+            raise FileNotFoundError(f"book texture does not exist: {path}")
+        uris[part] = path.resolve().as_uri()
+
     top = float(exhibit["size"][2]) / 2.0
+    tilt = math.radians(15.0)
+    # Everything stays inside the smallest allowed plinth (1.2 m x 1.0 m).
+    cradle_x, cradle_z = -0.14, top + 0.1144  # board centre; its front edge rests 3 cm above the plinth
+    page = (0.27, 0.445)                      # width:height 0.607, the woodblock page ratio
+    wood = _material((0.36, 0.22, 0.12, 1.0))
+    paper = _material((0.86, 0.80, 0.66, 1.0))
+    cover = _material((0.76, 0.66, 0.50, 1.0))
+
+    def on_cradle(x: float, y: float, z: float) -> tuple[float, ...]:
+        """Pose of a point given in the tilted cradle frame."""
+        return (cradle_x + x, y * math.cos(tilt) - z * math.sin(tilt),
+                cradle_z + y * math.sin(tilt) + z * math.cos(tilt), tilt, 0.0, 0.0)
+
     components = [
-        ("pedestal", _geometry_box(exhibit["size"]), (0.0, 0.0, 0.0),
-         _material(_PLINTH_COLOR)),
-        ("book_cover_left", _geometry_box((0.56, 0.78, 0.07)), (-0.28, 0.0, top + 0.085, 0.0, -0.18, 0.0),
-         _material((0.12, 0.16, 0.30, 1.0))),
-        ("book_cover_right", _geometry_box((0.56, 0.78, 0.07)), (0.28, 0.0, top + 0.085, 0.0, 0.18, 0.0),
-         _material((0.12, 0.16, 0.30, 1.0))),
-        ("book_pages_left", _geometry_box((0.51, 0.70, 0.12)), (-0.25, 0.0, top + 0.19, 0.0, -0.18, 0.0),
-         _material((0.90, 0.84, 0.68, 1.0))),
-        ("book_pages_right", _geometry_box((0.51, 0.70, 0.12)), (0.25, 0.0, top + 0.19, 0.0, 0.18, 0.0),
-         _material((0.90, 0.84, 0.68, 1.0))),
-        ("book_spine", _geometry_box((0.10, 0.76, 0.09)), (0.0, 0.0, top + 0.14),
-         _material((0.08, 0.10, 0.20, 1.0))),
+        ("pedestal", _geometry_box(exhibit["size"]), (0.0, 0.0, 0.0), _material(_PLINTH_COLOR)),
+        ("cradle_board", _geometry_box((0.66, 0.54, 0.03)), on_cradle(0.0, 0.0, 0.0), wood),
+        ("cradle_lip", _geometry_box((0.66, 0.02, 0.03)), on_cradle(0.0, -0.26, 0.03), wood),
+        ("cradle_back_leg", _geometry_box((0.60, 0.05, 0.157)),
+         (cradle_x, 0.2164, top + 0.0784, 0.0, 0.0, 0.0), wood),
+        ("cradle_front_leg", _geometry_box((0.60, 0.05, 0.043)),
+         (cradle_x, -0.2086, top + 0.0215, 0.0, 0.0, 0.0), wood),
+        ("open_cover", _geometry_box((0.58, 0.47, 0.004)), on_cradle(0.0, 0.005, 0.017), cover),
+        ("pages_left", _geometry_box((page[0], page[1], 0.02)), on_cradle(-0.1355, 0.005, 0.029), paper),
+        ("pages_right", _geometry_box((page[0], page[1], 0.02)), on_cradle(0.1355, 0.005, 0.029), paper),
     ]
-    pieces = []
-    for name, geometry, local_pose, material in components:
-        if len(local_pose) == 3:
-            local_pose = (*local_pose, 0.0, 0.0, 0.0)
-        pieces.append(_paired_primitive(name, geometry, local_pose, material))
+    # Four closed volumes, slightly askew like a set laid out beside the open one.
+    for index, (dx, dy, yaw) in enumerate(((0.0, 0.0, 0.20), (0.006, -0.004, 0.17),
+                                            (-0.004, 0.005, 0.22), (0.003, 0.002, 0.19))):
+        components.append((f"volume_{index}", _geometry_box((page[0], page[1], 0.012)),
+                           (0.40 + dx, 0.05 + dy, top + 0.006 + 0.012 * index, 0.0, 0.0, yaw),
+                           paper if index % 2 else cover))
+    pieces = [_paired_primitive(name, geometry, pose, material)
+              for name, geometry, pose, material in components]
+    pieces.append(_textured_plane("page_left", page, on_cradle(-0.1355, 0.005, 0.0395), uris["left"]))
+    pieces.append(_textured_plane("page_right", page, on_cradle(0.1355, 0.005, 0.0395), uris["right"]))
+    pieces.append(_textured_plane("volume_cover", page,
+                                  (0.403, 0.052, top + 0.048 + 0.0005, 0.0, 0.0, 0.19), uris["cover"]))
     return _model(str(exhibit["model_name"]), (*position[:2], position[2], 0.0, 0.0, 0.0),
                   f"<link name=\"link\">{''.join(pieces)}</link>")
 
@@ -619,7 +658,7 @@ def generate_world(config: dict, asset_root: Path) -> str:
             model = _poster_model(exhibit, position, size, asset_uri,
                                   float(exhibit.get("yaw", 0.0)))
         elif kind == "book":
-            model = _book_model(exhibit, position)
+            model = _book_model(exhibit, position, posters_root)
         else:
             model = _vase_model(exhibit, position)
         lines.append("    " + model)

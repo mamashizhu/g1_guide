@@ -16,7 +16,8 @@ MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE  # dataclasses look the module up while executing it
 SPEC.loader.exec_module(MODULE)
 
-EXPECTED = ["E01.png", "E02.png", "E03.png", "E04.png"]
+PAINTINGS = ["E01.png", "E02.png", "E03.png", "E04.png"]
+BOOK = ["E05_cover.png", "E05_left.png", "E05_right.png"]
 
 
 @pytest.fixture(scope="module")
@@ -28,14 +29,14 @@ def generated(tmp_path_factory) -> Path:
 
 def test_every_painting_has_a_documented_source() -> None:
     sources = (MODULE.SOURCE_DIR / "SOURCES.md").read_text(encoding="utf-8")
-    for painting in MODULE.PAINTINGS:
-        assert (MODULE.SOURCE_DIR / painting.source).is_file()
-        assert painting.source in sources
+    for source in [p.source for p in MODULE.PAINTINGS] + [MODULE.BOOK_SPREAD, MODULE.BOOK_COVERS]:
+        assert (MODULE.SOURCE_DIR / source).is_file()
+        assert source in sources
 
 
 def test_writes_four_3x2_rgb_textures(generated: Path) -> None:
-    assert sorted(p.name for p in generated.glob("*.png")) == EXPECTED
-    for name in EXPECTED:
+    assert sorted(p.name for p in generated.glob("*.png")) == PAINTINGS + BOOK
+    for name in PAINTINGS:
         with Image.open(generated / name) as image:
             assert image.mode == "RGB"
             assert image.size == (MODULE.WIDTH, MODULE.HEIGHT)
@@ -43,7 +44,7 @@ def test_writes_four_3x2_rgb_textures(generated: Path) -> None:
 
 
 def test_textures_are_visibly_different(generated: Path) -> None:
-    images = [Image.open(generated / name).convert("RGB") for name in EXPECTED]
+    images = [Image.open(generated / name).convert("RGB") for name in PAINTINGS + BOOK]
     for index, first in enumerate(images):
         for second in images[index + 1:]:
             assert ImageChops.difference(first, second).getbbox() is not None
@@ -51,7 +52,7 @@ def test_textures_are_visibly_different(generated: Path) -> None:
 
 def test_generation_is_reproducible(generated: Path, tmp_path: Path) -> None:
     MODULE.generate(tmp_path)
-    for name in EXPECTED:
+    for name in PAINTINGS + BOOK:
         assert (tmp_path / name).read_bytes() == (generated / name).read_bytes()
 
 
@@ -85,3 +86,11 @@ def test_label_text_avoids_glyphs_missing_from_droid_fallback() -> None:
         for text in (painting.title, painting.byline, painting.medium):
             assert not any(ch.isascii() and ch.isalnum() for ch in text), text
             assert "·" not in text
+
+
+def test_book_textures_share_the_page_ratio(generated: Path) -> None:
+    for name in BOOK:
+        with Image.open(generated / name) as image:
+            assert image.size == MODULE.BOOK_PAGE_SIZE
+    width, height = MODULE.BOOK_PAGE_SIZE
+    assert abs(width / height - 0.27 / 0.445) < 0.01  # matches the page blocks in the world

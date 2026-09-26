@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Compose the four gallery wall textures E01–E04 from public-domain paintings.
+"""Compose the gallery textures: the four framed paintings E01–E04 and the
+page/cover textures of the E05 book (Mustard Seed Garden Manual of Painting).
 
 Each texture is a dark display board with the painting centred at its own
 aspect ratio (nothing important is cropped away), a frame in the style of its
@@ -10,7 +11,9 @@ gilt frame.
 Sources live in ``assets/exhibition/paintings_src`` (see ``SOURCES.md`` there);
 only the composed PNGs are installed with the package.  The world generator
 uses them as poster textures, so the hall layout and ``exhibition.json`` asset
-names stay unchanged.
+names stay unchanged.  The book textures are flat scans (CC0, Metropolitan
+Museum of Art): a double-page spread cut into its two pages, and the cover of
+volume one with the museum's pasted English catalogue slip painted out.
 """
 
 from __future__ import annotations
@@ -61,6 +64,15 @@ PAINTINGS = (
     Painting("E04", "great_wave.jpg", "神奈川冲浪里", "葛饰北斋　日本　约一八三一年",
              "木版画　《富岳三十六景》之一", "gilt"),
 )
+
+# E05 book.  Crop boxes are fractions of the source image.
+BOOK_SPREAD = "jieziyuan_spread.jpg"   # 巨然横山图 double page, MET CP6
+BOOK_COVERS = "jieziyuan_covers.jpg"   # five volumes of the first collection, MET CIB 1 O1
+BOOK_LEFT_PAGE = (0.02, 0.02, 0.50, 0.985)
+BOOK_RIGHT_PAGE = (0.50, 0.02, 0.98, 0.985)
+BOOK_COVER = (0.5183, 0.0727, 0.9207, 0.9198)       # volume one, spine on the right
+BOOK_COVER_SLIP = (0.6084, 0.0909, 0.8913, 0.1653)  # English museum slip to hide
+BOOK_PAGE_SIZE = (600, 990)  # width:height 0.606, the page ratio of the woodblock edition
 
 FONT_CANDIDATES = (
     "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
@@ -183,6 +195,39 @@ def compose(painting: Painting, source_dir: Path = SOURCE_DIR,
     return board
 
 
+def _gutter_shadow(page: Image.Image, inner: str) -> Image.Image:
+    """Darken the binding edge: an open book's pages curve down into the gutter.
+    The flat scan has a bright fold there, which reads as a gap between pages."""
+    width, height = page.size
+    band = round(0.10 * width)
+    mask = Image.new("L", page.size, 255)
+    draw = ImageDraw.Draw(mask)
+    for step in range(band):
+        shade = round(255 * (0.55 + 0.45 * (step / band) ** 0.7))
+        x = width - 1 - step if inner == "right" else step
+        draw.line((x, 0, x, height), fill=shade)
+    return Image.composite(page, Image.new("RGB", page.size, (0, 0, 0)), mask)
+
+
+def book_textures(source_dir: Path = SOURCE_DIR) -> dict[str, Image.Image]:
+    """Left page, right page and closed-volume cover for the E05 book model."""
+    spread = Image.open(source_dir / BOOK_SPREAD).convert("RGB")
+    covers = Image.open(source_dir / BOOK_COVERS).convert("RGB")
+    # Hide the pasted catalogue slip with plain cover paper from further down.
+    w, h = covers.size
+    left, top, right, bottom = (round(BOOK_COVER_SLIP[0] * w), round(BOOK_COVER_SLIP[1] * h),
+                                round(BOOK_COVER_SLIP[2] * w), round(BOOK_COVER_SLIP[3] * h))
+    shift = round(0.22 * h)
+    covers.paste(covers.crop((left, top + shift, right, bottom + shift)), (left, top))
+    left_page = _crop(spread, BOOK_LEFT_PAGE).resize(BOOK_PAGE_SIZE, Image.LANCZOS)
+    right_page = _crop(spread, BOOK_RIGHT_PAGE).resize(BOOK_PAGE_SIZE, Image.LANCZOS)
+    return {
+        "E05_left.png": _gutter_shadow(left_page, inner="right"),
+        "E05_right.png": _gutter_shadow(right_page, inner="left"),
+        "E05_cover.png": _crop(covers, BOOK_COVER).resize(BOOK_PAGE_SIZE, Image.LANCZOS),
+    }
+
+
 def generate(output_dir: Path = OUTPUT_DIR, source_dir: Path = SOURCE_DIR) -> list[Path]:
     font_path = find_cjk_font()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -190,6 +235,10 @@ def generate(output_dir: Path = OUTPUT_DIR, source_dir: Path = SOURCE_DIR) -> li
     for painting in PAINTINGS:
         path = output_dir / f"{painting.exhibit_id}.png"
         compose(painting, source_dir, font_path).save(path, optimize=True)
+        written.append(path)
+    for name, image in book_textures(source_dir).items():
+        path = output_dir / name
+        image.save(path, optimize=True)
         written.append(path)
     return written
 
