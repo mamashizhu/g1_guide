@@ -23,7 +23,7 @@ import numpy as np
 from g1_guide.arm_kinematics import ALL_ARM_JOINTS, ArmKinematics, arm_joint_names
 from g1_guide.gestures import GestureEngine, GestureError, GestureLibrary
 
-MOVING_STATES = {"requested", "aligning", "moving", "blocked"}
+MOVING_STATES = {"requested", "aligning", "moving", "blocked", "backing_up"}
 COMMAND_TOPIC = "/g1/arm/{joint}/cmd_pos"
 # Pick the left arm only for targets clearly on the left; straight ahead uses
 # the right hand, as most guides do.

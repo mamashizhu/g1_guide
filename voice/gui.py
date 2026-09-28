@@ -37,7 +37,7 @@ STATE_STYLE = {
 }
 NAV_STATE = {
     "unknown": "未知", "requested": "收到目标", "moving": "移动中", "aligning": "调整朝向",
-    "arrived": "已到达", "blocked": "路线受阻", "cancelled": "已停止", "invalid_goal": "目标无效",
+    "arrived": "已到达", "blocked": "路线受阻", "backing_up": "后退避让", "cancelled": "已停止", "invalid_goal": "目标无效",
     "sensor_stale": "传感器中断", "invalid_command": "指令异常",
 }
 

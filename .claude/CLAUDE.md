@@ -75,7 +75,7 @@ bash /mnt/d/g1_guide/ws/build.sh
 - 展馆是导入的 Fuel 网格 `OpenRobotics/iscas_museum`（已缓存在 `~/.gz/fuel`，离线可用）。**它只有墙，没有地面也没有屋顶**，地面仍由 `exhibition_world.py` 生成。
 - `nav_grid` 按矩形规划，吃不了网格。墙体已离线烘焙成 `config/hall_nav_obstacles.json`（320 个矩形）。**改了展馆模型必须重新烘焙并验证**，流程见 `docs/exhibition-hall.md`。
 - 改布局坐标不要靠读图估，用 `tools/hall/check_layout.py` 对网格实测，再用 `tools/hall/check_tour.py` 确认 6 个展位仍可达。
-- 行走的 actor 没有碰撞体，雷达看不见，只有摄像头能拍到；参与避障的是 3 个静态参观者。
+- 行走的 actor 没有碰撞体，但 `gpu_lidar` 按渲染测距，**导航雷达能扫到它**（2026-09-26 在 2 号展位旁看到它路线上的回波）。北厅 actor 沿 y=9.2 走，正好穿过 1、2 号展位，会让机器人临时 blocked / 后退让路。
 
 ## SLAM 要点
 
@@ -90,6 +90,14 @@ bash /mnt/d/g1_guide/ws/build.sh
 - 在 WSL 里跑仿真要让 `wsl` 命令常驻（后台任务），不要 `nohup … &` 后退出，进程会被回收。
 - 与其他会话同时跑仿真时，用 `ROS_DOMAIN_ID` 和 `GZ_PARTITION` 隔离，避免话题串线。
 
+## 导航测试（先离线，后 Gazebo）
+
+- 决策逻辑在 `nav_core.NavigatorCore`（与 ROS 无关），`exhibition_nav` 节点只做收发。改导航先跑离线仿真，同一份代码：
+  `python3 tools/nav_sim.py`（简单展馆全部展位两两互达，约 20 s）；`--scene hall`（大展馆，约 3 分钟）；`--tour 3 1 --box-ahead 2:1.3 -v`（行进中前方放箱子并打印状态）。自动判卡死：20 s 没离开 0.5 m 范围。
+- 离线全过后，再用 `bash tools/nav_gz_tour.sh <名> 4 5` 在 Gazebo 里确认（慢，日志在 `.navrun/`）。
+- 已知的锁死机制（2026-09-26 修复）：①前方 < 0.8 m 时连原地转也禁止；②起点被动态点吞没时规划永远失败；③书、花瓶展台只有 0.9 m 高，雷达看不到，跟踪时切角进入其膨胀区，重新规划后永远失败。现在分别靠原地转身、后退脱困（`back_off`）、起点吸附到最近可通行点（`plan_with_escape`）处理。
+- 到站指向手势会把手臂抬进雷达平面（前方约 0.45 m 的回波），出发时会先后退一小段，属正常。
+
 ## 验证原则
 
 - 用户要求**可视化验证**：每完成一项，给出用户能亲眼看到效果的命令和合格标准。
@@ -98,6 +106,18 @@ bash /mnt/d/g1_guide/ws/build.sh
   - 2026-09-25 定位（`tools/mem_probe.sh`）：涨的全是进程堆内存；只开展馆不放机器人时主进程不涨、窗口照涨；改 `LIBGL_ALWAYS_SOFTWARE=1` 后两边都不涨 → 泄漏在 WSL 的 d3d12 显卡转译层，不是我们的代码。上游同类问题未修复：gazebosim/gz-sim#2873、PX4/PX4-Autopilot#27296。
   - 可用的折中（未接入 launch）：主进程用显卡 `headless:=true`，窗口另开 `LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe gz sim -g`，实测窗口不漏、实时率 0.44–0.48，只剩主进程约 8 MB/s。全部软件渲染实时率只有 0.005，不能用。
   - 用户决定（2026-09-25）：暂不处理泄漏，仿真日常直接用布局地图导航。
+
+## MuJoCo 实验（2026-09-28）
+
+- 独立于 ROS/Gazebo，在 **Windows 端**运行：双击 `mujoco\run_g1_walk.bat`，或 `D:\python\python.exe mujoco\g1_walk.py`；无窗口自检加 `--check`。
+- 用宇树 `unitree_rl_gym` 的 12 自由度模型 `scene.xml` 和预训练策略 `deploy/pre_train/g1/motion.pt`，参数读它的 `deploy_mujoco/configs/g1.yaml`。仓库克隆在 `mujoco/unitree_rl_gym/`，已加入 `.gitignore`。
+- 官方 `deploy_mujoco.py` 依赖 `legged_gym`/Isaac Gym，Windows 和 WSL 都装不了，**不要直接运行它**，用 `g1_walk.py`。
+- 斜坡楼梯场地 `mujoco/terrain.py`：用 `MjSpec` 在宇树 `scene.xml` 上加几何体（不改第三方文件），`g1_walk.py --course <跑道>` 加载；`python mujoco/terrain.py` 用射线核对尺寸。改了场地要重新跑核对。平地策略在 6 条跑道上全部不合格，这是基线。
+- 摔倒判定：机身倾斜超过 60°，或骨盆离脚下地面（按跑道设计高度算）< 0.45 m。
+- 策略的速度指令范围：vx −0.5～1.0，vy ±0.5，wz ±1.0，超出会走不稳。
+- `.bat` 文件只写 ASCII：cmd 按 GBK 读批处理，中文注释会被当成命令执行。
+- 训练新步态（上坡、上楼梯）：用户决定**本地不装 Isaac**（本机低于 Isaac Sim 5.1 最低配置：要求 RTX 4080 16GB、32GB 内存、驱动 ≥580.88，本机 4060 8GB、15GB、566.26）。Isaac Lab v2.3.x（Isaac Sim 5.1、Python 3.11）只装在租的 Linux 服务器上训练，训练好的策略拿回本地 MuJoCo 验证。服务器显卡必须带 RT 核心（4090/L40/A6000，不能用 A100/H100）。
+- 服务器环境已装好（2026-09-28，AutoDL RTX 4090，`ssh -p 53309 root@connect.bjb2.seetacloud.com`，公钥登录）。安装脚本、版本锁和踩坑记录在 `tools/isaac_server/`。要点：pip 用清华源（阿里云限速 HTTP/1.1）；装任何包都要带 `PIP_CONSTRAINT`，否则 torch 会被升级掉；远程杀进程先查 PID 再 kill，不要 `pkill -f`；容器缺 `libglu1-mesa libxt6`，不装会卡在材质加载；Vulkan 用不了 NVIDIA 卡，但不影响无画面训练。实测 G1 崎岖地形 4096 个机器人每轮 2.13 s，3000 轮约 1.8 h。本机 Git Bash 调 ssh 要加 `MSYS_NO_PATHCONV=1`，并用 Windows 的 `ssh.exe`（Git 自带的 ssh 因用户名是中文找不到 `~/.ssh`）。
 
 ## 渲染配置
 

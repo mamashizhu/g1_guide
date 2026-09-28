@@ -10,6 +10,13 @@ import math
 MAX_LINEAR_SPEED = 0.6
 MAX_ANGULAR_SPEED = 1.2
 OBSTACLE_STOP_DISTANCE = 0.80
+# Turning in place sweeps only the robot's own footprint (arms at home reach
+# ~0.35 m), so it stays allowed while the nearest return in any direction is
+# farther than this.  Forbidding it deadlocked the robot facing an obstacle.
+ROTATE_CLEARANCE = 0.50
+# Backing off: slow reverse, only while nothing is this close behind.
+REVERSE_SPEED = 0.15
+REAR_STOP_DISTANCE = 0.60
 ARRIVAL_DISTANCE = 0.25
 ARRIVAL_YAW_ERROR = 0.20
 TURN_IN_PLACE_ERROR = 0.35
@@ -58,6 +65,7 @@ def compute_command(
     *,
     final: bool = False,
     arrival_distance: float = ARRIVAL_DISTANCE,
+    turn_clearance: float = 0.0,
 ) -> Velocity:
     """Track a waypoint while enforcing speed, obstacle, and arrival limits.
 
@@ -70,6 +78,12 @@ def compute_command(
     ``arrival_distance`` is the goal position tolerance.  With an estimated
     pose (AMCL) the true stop error is this plus the localization error, so
     the SLAM map mode passes a tighter value.
+
+    ``turn_clearance`` is the nearest return in any direction.  Below
+    ``OBSTACLE_STOP_DISTANCE`` forward, linear motion stops, but turning in
+    place is still allowed when ``turn_clearance`` reaches
+    ``ROTATE_CLEARANCE``, so a replanned path can lead the robot away.  The
+    default 0.0 means unknown and keeps a blocked robot fully stopped.
     """
 
     try:
@@ -85,16 +99,27 @@ def compute_command(
             return _zero("invalid")
         if not (math.isfinite(arrival_distance) and arrival_distance > 0.0):
             return _zero("invalid")
+        if math.isnan(turn_clearance) or turn_clearance < 0.0:
+            return _zero("invalid")
     except (AttributeError, TypeError, ValueError, OverflowError):
         return _zero("invalid")
 
     try:
-        return _compute_validated(pose, waypoint, goal, forward_clearance, final,
-                                  arrival_distance)
+        command = _compute_validated(pose, waypoint, goal, forward_clearance, final,
+                                     arrival_distance)
     except (TypeError, ValueError, OverflowError):
         # Finite but extreme values can still overflow during subtraction or
         # angle wrapping. Treat those derived invalid values as unsafe too.
         return _zero("invalid")
+
+    if forward_clearance >= OBSTACLE_STOP_DISTANCE or command.status == "arrived":
+        return command
+    # Forward is blocked: never translate.  A pure turn is kept only when the
+    # robot's surroundings are clear; aligned with an obstacle ahead is blocked.
+    if (command.linear_x == 0.0 and command.angular_z != 0.0
+            and command.status == "aligning" and turn_clearance >= ROTATE_CLEARANCE):
+        return command
+    return _zero("blocked")
 
 
 def _compute_validated(
@@ -110,11 +135,6 @@ def _compute_validated(
 
     if final and goal_distance <= arrival_distance and abs(goal_yaw_error) <= ARRIVAL_YAW_ERROR:
         return _zero("arrived")
-
-    # Clearance is only known in the forward direction. Stop rotation too:
-    # without side/rear clearance, its swept footprint cannot be certified.
-    if forward_clearance < OBSTACLE_STOP_DISTANCE:
-        return _zero("blocked")
 
     if final and goal_distance <= arrival_distance:
         return Velocity(0.0, _bounded_angular(goal_yaw_error), "aligning")
@@ -147,3 +167,19 @@ def _compute_validated(
     target_distance = math.hypot(target_dx, target_dy)
     linear = min(MAX_LINEAR_SPEED, target_distance if final else goal_distance)
     return Velocity(linear, angular, "moving")
+
+
+def back_off(front_clearance: float, rear_clearance: float, target_clearance: float) -> Velocity:
+    """Reverse away from an obstacle until the planner has room again.
+
+    Used after a stop left the robot closer to an obstacle than the planning
+    clearance: it can neither get a plan nor turn.  Returns ``backing_up``
+    while reversing, ``blocked`` once ``front_clearance`` reaches
+    ``target_clearance`` (done) or the rear is not clear (cannot help).
+    """
+    values = (front_clearance, rear_clearance, target_clearance)
+    if any(math.isnan(v) or v < 0.0 for v in values):
+        return _zero("invalid")
+    if front_clearance >= target_clearance or rear_clearance < REAR_STOP_DISTANCE:
+        return _zero("blocked")
+    return Velocity(-REVERSE_SPEED, 0.0, "backing_up")

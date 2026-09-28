@@ -15,3 +15,7 @@ tools/hall/exhibition_preview.sdf
 tools/hall/gzrun.log
 tools/hall/probe_*.sdf
 tools/hall/variant_*.sdf
+.navrun/
+
+# MuJoCo：第三方仓库按 README 克隆，不入库
+mujoco/unitree_rl_gym/

@@ -37,7 +37,7 @@ BARGE_CONFIRM = 2       # consecutive non-echo polls needed before cutting the r
 MUTE_TAIL_S = 0.3       # without barge-in: keep the mic closed this long after speaking (room echo)
 WAKE_IDLE_S = 30.0      # with a wake word: fall asleep after this long without anyone talking
 CHILD_SPEED = 0.85      # offline TTS speed in child mode
-MOVING_STATES = {"requested", "aligning", "moving", "blocked"}
+MOVING_STATES = {"requested", "aligning", "moving", "blocked", "backing_up"}
 
 UiCallback = Callable[..., None]
 

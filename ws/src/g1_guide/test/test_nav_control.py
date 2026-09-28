@@ -9,8 +9,12 @@ from g1_guide.nav_control import (
     MAX_ANGULAR_SPEED,
     MAX_LINEAR_SPEED,
     OBSTACLE_STOP_DISTANCE,
+    ROTATE_CLEARANCE,
     Pose2D,
     Velocity,
+    REAR_STOP_DISTANCE,
+    REVERSE_SPEED,
+    back_off,
     compute_command,
 )
 
@@ -166,6 +170,39 @@ class ComputeCommandTest(unittest.TestCase):
         )
         self.assertEqual(arrived, Velocity(0.0, 0.0, "arrived"))
 
+    def test_blocked_robot_may_turn_away_when_surroundings_clear(self):
+        # Obstacle straight ahead, replanned path leads left: turn in place.
+        command = compute_command(
+            self.pose, Pose2D(0.0, 2.0, 0.0), Pose2D(0.0, 3.0, 0.0), 0.3,
+            turn_clearance=ROTATE_CLEARANCE,
+        )
+        self.assertEqual(command.status, "aligning")
+        self.assertEqual(command.linear_x, 0.0)
+        self.assertGreater(command.angular_z, 0.0)
+
+    def test_blocked_robot_never_translates_or_turns_into_tight_space(self):
+        aligned = compute_command(
+            self.pose, self.waypoint, self.goal, 0.3, turn_clearance=5.0)
+        self.assertEqual(aligned, Velocity(0.0, 0.0, "blocked"))
+        tight = compute_command(
+            self.pose, Pose2D(0.0, 2.0, 0.0), self.goal, 0.3,
+            turn_clearance=ROTATE_CLEARANCE - 1e-6)
+        self.assertEqual(tight, Velocity(0.0, 0.0, "blocked"))
+
+    def test_blocked_final_alignment_turns_when_clear(self):
+        command = compute_command(
+            self.pose, self.waypoint, Pose2D(0.0, 0.0, 0.5), 0.3, final=True,
+            turn_clearance=1.0)
+        self.assertEqual(command.status, "aligning")
+        self.assertGreater(command.angular_z, 0.0)
+
+    def test_invalid_turn_clearance_fails_closed(self):
+        for value in (math.nan, -0.1):
+            with self.subTest(value=value):
+                command = compute_command(self.pose, self.waypoint, self.goal, 2.0,
+                                          turn_clearance=value)
+                self.assertEqual(command, Velocity(0.0, 0.0, "invalid"))
+
     def test_non_finite_values_fail_closed(self):
         for value in (math.nan, math.inf, -math.inf):
             cases = (
@@ -209,6 +246,22 @@ class ComputeCommandTest(unittest.TestCase):
             final=True,
         )
         self.assertEqual(command, Velocity(0.0, 0.0, "invalid"))
+
+
+class BackOffTest(unittest.TestCase):
+    def test_reverses_slowly_until_front_has_room(self):
+        self.assertEqual(back_off(0.4, 2.0, 0.95), Velocity(-REVERSE_SPEED, 0.0, "backing_up"))
+        self.assertEqual(back_off(0.95, 2.0, 0.95), Velocity(0.0, 0.0, "blocked"))
+
+    def test_never_reverses_into_rear_obstacle(self):
+        self.assertEqual(back_off(0.4, REAR_STOP_DISTANCE - 1e-6, 0.95),
+                         Velocity(0.0, 0.0, "blocked"))
+        self.assertEqual(back_off(0.4, math.inf, 0.95).status, "backing_up")
+
+    def test_invalid_inputs_fail_closed(self):
+        for args in ((math.nan, 2.0, 0.95), (0.4, -1.0, 0.95), (0.4, 2.0, math.nan)):
+            with self.subTest(args=args):
+                self.assertEqual(back_off(*args), Velocity(0.0, 0.0, "invalid"))
 
 
 if __name__ == "__main__":

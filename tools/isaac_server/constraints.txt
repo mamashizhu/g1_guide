@@ -1,0 +1,5 @@
+# Isaac Sim 5.1 锁定的版本，防止 Isaac Lab 依赖把它们升级掉
+torch==2.7.0+cu128
+torchvision==0.22.0+cu128
+packaging==23.0
+setuptools<81

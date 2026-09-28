@@ -9,6 +9,11 @@ g1_guide/
 ├── PLAN.md                       任务清单与计划
 ├── docs/
 │   └── exhibition-hall.md        展馆网格模型与人物模型：导入、烘焙导航地图、布局坐标、排错
+├── mujoco/                       MuJoCo 实验：G1 用宇树预训练策略走路（Windows 端，与 ROS 无关）
+│   ├── g1_walk.py                启动脚本（键盘改速度、摔倒复位、--check 自检）
+│   ├── run_g1_walk.bat           双击启动
+│   ├── terrain.py                斜坡楼梯测试场地（6 条跑道）与尺寸核对
+│   └── unitree_rl_gym/           宇树官方仓库（克隆得到，不入库）
 ├── ws/                           ROS2 工作区
 │   ├── build.sh                  构建脚本（生成 URDF + colcon --symlink-install）
 │   └── src/
@@ -117,6 +122,47 @@ SLAM 地图模式的完整流程与真机一致：先建图（`slam.launch.py li
 4. 地图旁的 `*_meta.json` 记录了建图的展馆，地图和展馆不一致时启动会直接报错。
 
 仿真里验证过的数据：简单展馆 SLAM 建图墙体偏差 p95 0.06m，14 个物体全部建进地图；里程计漂 2.6m 时 AMCL 定位误差平均 0.05m。
+
+## MuJoCo：G1 行走（实验）
+
+与 Gazebo 那套 ROS 仿真无关，是一个独立的实验。在 Windows 端运行，用的是宇树 `unitree_rl_gym` 里训练好的 12 自由度腿部行走策略 `motion.pt`。官方的 `deploy_mujoco.py` 依赖 Isaac Gym（Windows 和 WSL 都装不了），这里改写成不依赖它的 `mujoco/g1_walk.py`。
+
+**启动**：双击 `mujoco\run_g1_walk.bat`，或者在命令行运行：
+
+```bat
+D:\python\python.exe mujoco\g1_walk.py
+```
+
+窗口里的按键：↑↓ 调前进速度（每次 ±0.1 m/s），←→ 调转向，PgUp/PgDn 调横移，Home 速度清零（原地踏步），End 复位，空格暂停。摔倒后会自动复位。可以用参数指定初始速度，例如 `--vx 0.3 --wz 0.5`。
+
+**合格标准**：机器人以 0.5 m/s 向前走，骨盆高度稳定，一直不倒；按 ← 能转弯；按 Home 后原地踏步。
+
+**无窗口自检**：`python mujoco\g1_walk.py --check`（10 s 仿真约 1 s 跑完）。2026-09-28 实测：直走 10 s 路程 4.66 m（0.47 m/s）；转圈（vx 0.3、wz 0.5）和横移（vy 0.3）都没有摔倒。
+
+**斜坡楼梯场地**（`mujoco/terrain.py`，给以后训练的上坡、上楼梯策略做验证用）：6 条平行跑道，机器人从 x=0 出发，跑道从 x=2 m 开始，宽 1.6 m。
+
+| 跑道 | 内容 |
+|------|------|
+| `slope5` / `slope10` / `slope15` | 上坡 3 m → 平台 1.5 m → 下坡 3 m，坡度 5°/10°/15° |
+| `stairs10` / `stairs15` / `stairs18` | 上 5 级 → 平台 1.5 m → 下 5 级，台阶高 10/15/18 cm，踏面 30 cm |
+
+```bat
+mujoco\run_g1_walk.bat --course field --vx 0      :: 看整个场地，站在中间自己开
+mujoco\run_g1_walk.bat --course stairs15          :: 站在该跑道前自动往前走
+D:\python\python.exe mujoco\terrain.py            :: 射线实测每条跑道，与设计尺寸对比
+D:\python\python.exe mujoco\g1_walk.py --course stairs15 --check   :: 无窗口判定能否走完
+```
+
+建模核对（2026-09-28）：射线实测 6 条跑道的坡度、台阶级数和高度与设计完全一致，高度误差 0 mm。现在的平地策略作为基线：6 条全部不合格。5° 坡能爬到顶，但走偏从平台侧面掉下去；10°、15° 坡爬不上去；三种楼梯都在第 1～2 级摔倒。
+
+**新机器上的安装**：
+
+```bat
+D:\python\python.exe -m pip install mujoco torch pyyaml numpy
+git clone --depth 1 https://github.com/unitreerobotics/unitree_rl_gym mujoco\unitree_rl_gym
+```
+
+`mujoco/unitree_rl_gym/`（约 195 MB）不入库，已写进 `.gitignore`。当前版本：mujoco 3.14.0、torch 2.9.0。
 
 ## 工具
 
