@@ -4,7 +4,7 @@
     policy.pt / policy.onnx   策略网络
     deploy.json               关节顺序、默认姿态、PD 增益、动作缩放、观测组成、控制周期、高度扫描点
 用法（服务器，Isaac Lab 环境内）：
-    ./isaaclab.sh -p /root/autodl-tmp/export_policy.py --checkpoint <model_*.pt>
+    ./isaaclab.sh -p /root/isaac/export_policy.py --checkpoint <model_*.pt>
 """
 import argparse
 import json
@@ -40,6 +40,9 @@ def main():
     env_cfg = parse_env_cfg(TASK, device=args.device, num_envs=1)
     env = RslRlVecEnvWrapper(gym.make(TASK, cfg=env_cfg))
     agent_cfg = load_cfg_from_registry(TASK, "rsl_rl_cfg_entry_point")
+    # 训练时若用了 noise_std_type=log，checkpoint 里存的是 log_std，网络要按同样方式建
+    if "log_std" in torch.load(args.checkpoint, map_location="cpu", weights_only=False)["model_state_dict"]:
+        agent_cfg.policy.noise_std_type = "log"
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=args.device)
     runner.load(args.checkpoint)
     policy_nn = runner.alg.policy
@@ -102,7 +105,7 @@ if __name__ == "__main__":
         main()
     except BaseException:
         import traceback
-        with open("/root/autodl-tmp/export_policy.err", "w") as f:
+        with open("/root/isaac/export_policy.err", "w") as f:
             traceback.print_exc(file=f)
         raise
     finally:

@@ -7,7 +7,7 @@
     上坡 slope_up / 下坡 slope_down 同理
 
 用法（服务器，Isaac Lab 环境内）：
-    ./isaaclab.sh -p /root/autodl-tmp/eval_terrain.py --checkpoint <model_*.pt> --terrain stairs_up --value 0.15
+    ./isaaclab.sh -p /root/isaac/eval_terrain.py --checkpoint <model_*.pt> --terrain stairs_up --value 0.15
 输出最后一行是 JSON，方便汇总。
 """
 import argparse
@@ -25,7 +25,7 @@ parser.add_argument("--value", type=float, default=0.0, help="台阶高（米）
 parser.add_argument("--num_envs", type=int, default=64)
 parser.add_argument("--vx", type=float, default=0.5, help="前进速度指令 m/s")
 parser.add_argument("--seconds", type=float, default=20.0)
-parser.add_argument("--out", default="/root/autodl-tmp/eval_results.jsonl", help="结果追加写入的文件（Isaac Sim 会吞终端输出）")
+parser.add_argument("--out", default="/root/isaac/eval_results.jsonl", help="结果追加写入的文件（Isaac Sim 会吞终端输出）")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 args.headless = True
@@ -79,6 +79,9 @@ def main():
 
     env = RslRlVecEnvWrapper(gym.make(TASK, cfg=env_cfg))
     agent_cfg = load_cfg_from_registry(TASK, "rsl_rl_cfg_entry_point")
+    # 训练时若用了 noise_std_type=log，checkpoint 里存的是 log_std，网络要按同样方式建
+    if "log_std" in torch.load(args.checkpoint, map_location="cpu", weights_only=False)["model_state_dict"]:
+        agent_cfg.policy.noise_std_type = "log"
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=None, device=args.device)
     runner.load(args.checkpoint)
     policy = runner.get_inference_policy(device=env.unwrapped.device)
@@ -90,6 +93,9 @@ def main():
     max_dist = torch.zeros(n, device=dev)
     fallen = torch.zeros(n, dtype=torch.bool, device=dev)
     ended = torch.zeros(n, dtype=torch.bool, device=dev)
+    scanner = env.unwrapped.scene["height_scanner"]
+    height_sum = torch.zeros(n, device=dev)   # 骨盆离地高度累计（地面 = 高度扫描命中点的平均，与奖励里的算法一致）
+    height_cnt = torch.zeros(n, device=dev)
 
     obs = env.get_observations()
     for _ in range(int(args.seconds / env.unwrapped.step_dt)):
@@ -103,13 +109,19 @@ def main():
         max_dist = torch.where(live & ~dones, torch.maximum(max_dist, dist), max_dist)
         fallen |= live & dones & ~timeouts
         ended |= dones
+        ground = torch.nan_to_num(scanner.data.ray_hits_w[..., 2], posinf=0.0, neginf=0.0).mean(dim=1)
+        ok = live & ~dones
+        height_sum += torch.where(ok, robot.data.root_pos_w[:, 2] - ground, 0.0)
+        height_cnt += ok.float()
 
     passed = (~fallen) & (max_dist >= goal)
+    base_height = (height_sum / height_cnt.clamp(min=1)).mean().item()
     res = {
         "terrain": args.terrain, "value": args.value, "vx": args.vx, "robots": n,
         "pass_rate": round(passed.float().mean().item(), 3),
         "fall_rate": round(fallen.float().mean().item(), 3),
         "median_dist": round(max_dist.median().item(), 2), "goal_dist": goal,
+        "base_height": round(base_height, 3),
     }
     print("EVAL_RESULT " + json.dumps(res))
     with open(args.out, "a") as f:

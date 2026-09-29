@@ -19,3 +19,6 @@ tools/hall/variant_*.sdf
 
 # MuJoCo：第三方仓库按 README 克隆，不入库
 mujoco/unitree_rl_gym/
+
+# MuJoCo Menagerie 2024-07 版 G1（37 关节，对应 Isaac Lab 的 g1_minimal），用 gh 下载，不入库
+mujoco/menagerie_g1_2024/

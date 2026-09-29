@@ -1,9 +1,10 @@
 #!/bin/bash
-# 在数据盘安装 Isaac Sim 5.1 + Isaac Lab v2.3.2。系统盘只有 30 GB，环境和缓存都放 /root/autodl-tmp。
+export TERM=xterm  # isaaclab.sh 开头调用 tabs，TERM 为空或 dumb 会直接退出
+# 在数据盘安装 Isaac Sim 5.1 + Isaac Lab v2.3.2。系统盘只有 30 GB，环境和缓存都放 /root/isaac。
 # 下载源（2026-09-28 实测，pip 只用 HTTP/1.1）：清华 PyPI 9 MB/s；pypi.nvidia.com 会跳到 pypi.nvidia.cn，7.5 MB/s；
 # cu128 版 torch 只有阿里云镜像有，但阿里云限速 HTTP/1.1，所以用 curl（HTTP/2，10 MB/s）先下到本地。
 set -e
-D=/root/autodl-tmp
+D=/root/isaac
 export TMPDIR=$D/tmp  # pip 临时文件默认在系统盘 /tmp，会撑满系统盘
 mkdir -p $TMPDIR $D/wheels
 source /root/miniconda3/etc/profile.d/conda.sh

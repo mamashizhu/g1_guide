@@ -108,10 +108,11 @@ def _add_course(wb, c):
                 _box(wb, f"{c.name}_{side}{k}", [x0 + TREAD / 2, c.y, h / 2], [TREAD / 2, hw, h / 2], STAIR_RGBA)
 
 
-def build_spec():
-    if not os.path.isfile(SCENE):
-        raise SystemExit(f"找不到 {SCENE}\n先按 README 的 MuJoCo 一节克隆 unitree_rl_gym。")
-    spec = mujoco.MjSpec.from_file(SCENE)
+def build_spec(scene=SCENE):
+    """在给定机器人场景（默认宇树 12 自由度 scene.xml）上加 6 条跑道。场地几何体都在 group 0。"""
+    if not os.path.isfile(scene):
+        raise SystemExit(f"找不到 {scene}\n先按 README 的 MuJoCo 一节下载模型。")
+    spec = mujoco.MjSpec.from_file(scene)
     for c in COURSES:
         _add_course(spec.worldbody, c)
     return spec

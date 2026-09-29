@@ -1,0 +1,13 @@
+{"terrain": "stairs_up", "value": 0.1, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.57, "goal_dist": 3.2, "base_height": 0.64}
+{"terrain": "stairs_up", "value": 0.15, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.09, "goal_dist": 3.2, "base_height": 0.642}
+{"terrain": "stairs_up", "value": 0.18, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.89, "goal_dist": 3.2, "base_height": 0.645}
+{"terrain": "stairs_up", "value": 0.23, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.89, "goal_dist": 3.2, "base_height": 0.651}
+{"terrain": "stairs_down", "value": 0.15, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 8.83, "goal_dist": 3.2, "base_height": 0.643}
+{"terrain": "slope_up", "value": 10.0, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.02, "goal_dist": 3.75, "base_height": 0.634}
+{"terrain": "slope_up", "value": 15.0, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 8.97, "goal_dist": 3.75, "base_height": 0.637}
+{"terrain": "slope_up", "value": 20.0, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 8.46, "goal_dist": 3.75, "base_height": 0.647}
+{"terrain": "stairs_down", "value": 0.23, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 8.38, "goal_dist": 3.2, "base_height": 0.656}
+{"terrain": "stairs_up", "value": 0.25, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.55, "goal_dist": 3.2, "base_height": 0.655}
+{"terrain": "stairs_up", "value": 0.18, "vx": 1.0, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 17.99, "goal_dist": 3.2, "base_height": 0.656}
+{"terrain": "flat", "value": 0.0, "vx": 1.0, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 18.59, "goal_dist": 3.0, "base_height": 0.643}
+{"terrain": "flat", "value": 0.0, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.81, "goal_dist": 3.0, "base_height": 0.629}
