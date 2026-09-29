@@ -151,8 +151,11 @@ def build_system_prompt(exhibits: list[Exhibit]) -> str:
 """
 
 
-def event_message(state: str, exhibit: Exhibit | None) -> str:
+def event_message(state: str, exhibit: Exhibit | None, present_mode: str = "point") -> str:
     name = f"{exhibit.exhibit_id} {exhibit.title}" if exhibit else "目标"
+    if state == "arrived" and present_mode == "face":
+        return (f"[系统事件] 已到达 {name}，机器人正在转身面向观众（面向观众模式）。"
+                "这次讲解不要用 point 指向展品，改用 present 或 explain_loop，请开始讲解。")
     return {
         "arrived": f"[系统事件] 已到达 {name}，请开始讲解。",
         "blocked": f"[系统事件] 前往 {name} 的路线被挡住了，机器人正在停车重新规划。请向游客简短说明。",
@@ -163,12 +166,14 @@ def event_message(state: str, exhibit: Exhibit | None) -> str:
 
 class GuideDialog:
     def __init__(self, backend, robot: Robot, log: Callable[[str], None] = print,
-                 style: Style | None = None, on_style: Callable[[Style], None] | None = None):
+                 style: Style | None = None, on_style: Callable[[Style], None] | None = None,
+                 on_audience_request: Callable[[str], None] | None = None):
         self.backend = backend
         self.robot = robot
         self.log = log
         self.style = style or Style()
         self.on_style = on_style
+        self.on_audience_request = on_audience_request  # the visitor asked for an audience mode
 
     def execute(self, call: ToolCall) -> str:
         if call.name == "goto_exhibit":
@@ -179,6 +184,8 @@ class GuideDialog:
             return self.robot.describe_status()
         if call.name == "set_style":
             self.style.update(call.args.get("audience"), call.args.get("humor"))
+            if call.args.get("audience") in AUDIENCES and self.on_audience_request:
+                self.on_audience_request(call.args["audience"])
             if self.on_style:
                 self.on_style(self.style)
             return f"已切换为{AUDIENCES[self.style.audience]}模式，幽默{self.style.humor}/10，从这句开始按新风格说"

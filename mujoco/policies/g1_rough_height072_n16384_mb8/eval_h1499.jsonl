@@ -1,0 +1,12 @@
+{"terrain": "stairs_up", "value": 0.1, "vx": 0.5, "robots": 64, "pass_rate": 0.969, "fall_rate": 0.0, "median_dist": 8.44, "goal_dist": 3.2, "base_height": 0.682}
+{"terrain": "stairs_up", "value": 0.15, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.16, "goal_dist": 3.2, "base_height": 0.682}
+{"terrain": "stairs_up", "value": 0.18, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.16, "goal_dist": 3.2, "base_height": 0.683}
+{"terrain": "stairs_up", "value": 0.23, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.016, "median_dist": 9.05, "goal_dist": 3.2, "base_height": 0.686}
+{"terrain": "stairs_down", "value": 0.15, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.94, "goal_dist": 3.2, "base_height": 0.686}
+{"terrain": "slope_up", "value": 10.0, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 9.4, "goal_dist": 3.75, "base_height": 0.67}
+{"terrain": "slope_up", "value": 15.0, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.55, "goal_dist": 3.75, "base_height": 0.673}
+{"terrain": "slope_up", "value": 20.0, "vx": 0.5, "robots": 64, "pass_rate": 0.781, "fall_rate": 0.0, "median_dist": 9.25, "goal_dist": 3.75, "base_height": 0.683}
+{"terrain": "stairs_down", "value": 0.23, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 9.16, "goal_dist": 3.2, "base_height": 0.693}
+{"terrain": "stairs_up", "value": 0.25, "vx": 0.5, "robots": 64, "pass_rate": 0.969, "fall_rate": 0.031, "median_dist": 8.98, "goal_dist": 3.2, "base_height": 0.688}
+{"terrain": "stairs_up", "value": 0.18, "vx": 1.0, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 17.83, "goal_dist": 3.2, "base_height": 0.682}
+{"terrain": "flat", "value": 0.0, "vx": 1.0, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 18.79, "goal_dist": 3.0, "base_height": 0.672}

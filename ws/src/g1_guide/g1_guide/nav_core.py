@@ -11,8 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
-from .nav_control import (ARRIVAL_DISTANCE, MAX_ANGULAR_SPEED, MAX_LINEAR_SPEED, Pose2D,
-                          back_off, compute_command)
+from .nav_control import (ARRIVAL_DISTANCE, MAX_ANGULAR_SPEED, MAX_LINEAR_SPEED,
+                          ROTATE_CLEARANCE, Pose2D, back_off, compute_command)
 from .nav_grid import OccupancyGrid, _box, _RectangleIndex
 
 
@@ -26,6 +26,25 @@ BACK_OFF_HALF_ANGLE = 1.05
 BACK_OFF_MARGIN = 0.10
 # Waypoints this close to the robot count as reached.
 WAYPOINT_REACHED = 0.25
+# When fresh laser points cut the path ahead, replan early (at most this
+# often) instead of driving on until the forward gate forces a stop.
+REPLAN_BLOCKED_MIN_S = 1.0
+# Obstacle memory: dynamic points stay in the planner for this long after
+# they were last seen, unless a later beam passes through their spot.
+# Without it the robot forgot an obstacle as soon as it turned away (or it
+# fell out of view), replanned back towards it, saw it again, and looped.
+MEMORY_S = 15.0
+MEMORY_CELL = 0.10
+MEMORY_SELF_RADIUS = 0.60   # own arms and shoulders, never remembered
+MEMORY_CLEAR_MARGIN = 0.30  # a beam must reach this far past a point to clear it
+MEMORY_OPEN_RANGE = 7.5     # a beam with no return saw free space this far
+# 讲解模式「面向观众」(PLAN M5.5): after arriving, turn in place to the centre
+# of the people within FACE_RADIUS, as reported by /guide/people.
+PRESENT_MODES = ("point", "face")
+FACE_RADIUS = 3.0
+FACE_YAW_TOLERANCE = 0.07
+FACE_TIMEOUT_S = 8.0
+PEOPLE_STALE_S = 1.5
 
 
 def wrap_angle(angle: float) -> float:
@@ -39,9 +58,12 @@ class StaticGeometry:
     (``nav_obstacles``) and static visitors, the same set the planner grid
     treats as static.  Missing the hall walls made every wall return a
     "dynamic" point, so a robot near a wall could never plan a path.
+
+    ``include_people=False`` leaves the static visitors out, for people
+    detection, which must see them.
     """
 
-    def __init__(self, config: dict, tolerance: float = 0.25):
+    def __init__(self, config: dict, tolerance: float = 0.25, include_people: bool = True):
         room = config["room"]
         self.inner_x = (float(room["width"])-float(room["wall_thickness"]))/2
         self.inner_y = (float(room["depth"])-float(room["wall_thickness"]))/2
@@ -49,7 +71,7 @@ class StaticGeometry:
         rectangles = []
         for field_name in ("exhibits", "obstacles", "nav_obstacles", "people"):
             for item in config.get(field_name, ()):
-                if field_name == "people" and item.get("kind") != "static":
+                if field_name == "people" and (not include_people or item.get("kind") != "static"):
                     continue
                 box = _box(item.get("position"), item.get("size"), item.get("yaw", 0.0))
                 if box is not None:
@@ -149,6 +171,7 @@ class NavigatorCore:
         self.arrival_distance = float(arrival_distance)
         self.scan_points: list[tuple[float, float]] = []
         self.dynamic_points: list[tuple[float, float]] = []
+        self.memory: dict[tuple[int, int], tuple[float, float, float]] = {}
         self.scan_origin: tuple[float, float] | None = None
         self.goal_key: str | None = None
         self.path: list[tuple[float, float]] = []
@@ -156,17 +179,45 @@ class NavigatorCore:
         self.last_plan_at = -math.inf
         self.replans = 0
         self.backing_up = False
+        self.present_mode = "point"
+        self.people: list[dict] = []
+        self.people_at = -math.inf
+        self.facing_yaw: float | None = None
+        self.facing_since = 0.0
+
+    def set_present_mode(self, mode: str) -> bool:
+        if mode not in PRESENT_MODES:
+            return False
+        self.present_mode = mode
+        return True
+
+    def set_people(self, people: list[dict], now: float) -> None:
+        """People (dicts with world ``x``, ``y``) from the latest /guide/people."""
+        self.people = list(people)
+        self.people_at = now
+
+    def people_near(self, pose: Pose2D, now: float) -> int | None:
+        """Head count within FACE_RADIUS; None without fresh people data."""
+        if now - self.people_at > PEOPLE_STALE_S:
+            return None
+        return sum(p.get("group", 1) for p in self.people
+                   if math.hypot(p["x"] - pose.x, p["y"] - pose.y) <= FACE_RADIUS)
 
     def payload(self, state: str, **details) -> dict:
         return {"state": state, "goal_key": self.goal_key, "replans": self.replans,
                 "path_points": len(self.path), **details}
 
     def set_goal(self, key: str) -> dict:
-        """Accept a station key, or 0/cancel/q; returns the status payload."""
+        """Accept a station key, ``face`` (turn to the people here), or
+        0/cancel/q; returns the status payload."""
         key = key.strip()
         self.path = []
         self.path_index = 0
         self.backing_up = False
+        self.facing_yaw = None
+        if key == "face":
+            self.goal_key = key
+            return self.payload("facing")
         if key in ("0", "cancel", "q"):
             self.goal_key = None
             return self.payload("cancelled")
@@ -178,15 +229,50 @@ class NavigatorCore:
         return self.payload("requested")
 
     def set_scan(self, points: list[tuple[float, float]],
-                 origin: tuple[float, float] | None = None) -> None:
-        """Laser endpoints in the global frame, floor returns already removed."""
+                 origin: tuple[float, float] | None = None, now: float | None = None) -> None:
+        """Laser endpoints in the global frame, floor returns already removed.
+
+        With ``origin`` and ``now``, dynamic points are also remembered (see
+        MEMORY_S); ``dynamic_points`` is then the remembered set.
+        """
         self.scan_points = points
-        self.dynamic_points = [point for point in points if not self.static_geometry.hit(point)]
+        current = [point for point in points if not self.static_geometry.hit(point)]
         self.scan_origin = origin
+        if origin is None or now is None:
+            self.dynamic_points = current
+            return
+        self._update_memory(points, current, origin, now)
+        self.dynamic_points = [(x, y) for x, y, _ in self.memory.values()]
+
+    def _update_memory(self, points, current, origin, now) -> None:
+        ox, oy = origin
+        nearest = [math.inf] * 360
+        for x, y in points:
+            index = int(math.degrees(math.atan2(y-oy, x-ox))) % 360
+            nearest[index] = min(nearest[index], math.hypot(x-ox, y-oy))
+        kept = {}
+        for key, (x, y, seen) in self.memory.items():
+            if now - seen > MEMORY_S:
+                continue
+            distance = math.hypot(x-ox, y-oy)
+            beam = nearest[int(math.degrees(math.atan2(y-oy, x-ox))) % 360]
+            if math.isinf(beam):
+                if distance < MEMORY_OPEN_RANGE:
+                    continue
+            elif beam > distance + MEMORY_CLEAR_MARGIN:
+                continue
+            kept[key] = (x, y, seen)
+        for x, y in current:
+            if math.hypot(x-ox, y-oy) <= MEMORY_SELF_RADIUS:
+                continue
+            kept[(round(x / MEMORY_CELL), round(y / MEMORY_CELL))] = (x, y, now)
+        self.memory = kept
 
     def step(self, pose: Pose2D, now: float) -> Command:
         if self.goal_key is None:
             return Command()
+        if self.goal_key == "face" or self.facing_yaw is not None:
+            return self._face_step(pose, now)
         station = self.stations[self.goal_key]
         goal = Pose2D(float(station["x"]), float(station["y"]), float(station["yaw"]))
         distance_to_goal = math.hypot(pose.x-goal.x, pose.y-goal.y)
@@ -196,7 +282,10 @@ class NavigatorCore:
                 return command
         # The planner is refreshed as fresh LiDAR obstacles enter its map.
         if (not self.path and now-self.last_plan_at > REPLAN_RETRY_S) or (
-                self.path and now-self.last_plan_at > REPLAN_WALL_INTERVAL_S):
+                self.path and now-self.last_plan_at > REPLAN_WALL_INTERVAL_S) or (
+                self.path and now-self.last_plan_at > REPLAN_BLOCKED_MIN_S
+                and self.grid.path_blocked([(pose.x, pose.y), *self.path[self.path_index:]],
+                                           self.dynamic_points, (pose.x, pose.y))):
             plan = plan_with_escape(self.grid, (pose.x, pose.y), (goal.x, goal.y),
                                     self.dynamic_points)
             self.last_plan_at = now
@@ -204,7 +293,7 @@ class NavigatorCore:
                 self.path = []
                 self._start_back_off(pose)
                 return Command(status=self._plan_failure(pose, goal, distance_to_goal))
-            self.path = plan
+            self.path = self.grid.shortcut(plan, self.dynamic_points)
             self.path_index = 0
             self.replans += 1
         if not self.path:
@@ -231,9 +320,45 @@ class NavigatorCore:
             self.path = []
             self._start_back_off(pose)
         if velocity.status == "arrived":
-            self.goal_key = None
-            linear = angular = 0.0
+            if self.present_mode == "face" and self._start_facing(pose, now):
+                return Command(status=self.payload("facing", distance_m=round(distance_to_goal, 3)))
+            return Command(status=self._finish(pose, now, "arrived", faced=False,
+                                               distance_m=round(distance_to_goal, 3)))
         return Command(linear, angular, status)
+
+    def _start_facing(self, pose: Pose2D, now: float) -> bool:
+        from .people_core import face_heading
+
+        if now - self.people_at > PEOPLE_STALE_S:
+            return False
+        heading = face_heading(self.people, pose.x, pose.y, FACE_RADIUS)
+        if heading is None:
+            return False
+        self.facing_yaw = heading
+        self.facing_since = now
+        return True
+
+    def _face_step(self, pose: Pose2D, now: float) -> Command:
+        """Turn in place towards the people; ends in ``arrived`` (or ``faced``
+        for the bare ``face`` command) whether or not anyone was there."""
+        done = "faced" if self.goal_key == "face" else "arrived"
+        if self.facing_yaw is None and not self._start_facing(pose, now):
+            return Command(status=self._finish(pose, now, done, faced=False))
+        error = wrap_angle(self.facing_yaw - pose.yaw)
+        if abs(error) <= FACE_YAW_TOLERANCE:
+            return Command(status=self._finish(pose, now, done, faced=True))
+        if (now - self.facing_since > FACE_TIMEOUT_S
+                or nearest_distance(pose, self.scan_points) < ROTATE_CLEARANCE):
+            return Command(status=self._finish(pose, now, done, faced=False))
+        angular = max(-MAX_ANGULAR_SPEED, min(MAX_ANGULAR_SPEED, 1.5 * error))
+        return Command(0.0, angular, self.payload("facing", yaw_error_deg=round(math.degrees(error), 1)))
+
+    def _finish(self, pose: Pose2D, now: float, state: str, **details) -> dict:
+        payload = self.payload(state, present_mode=self.present_mode,
+                               people_near=self.people_near(pose, now), **details)
+        self.goal_key = None
+        self.facing_yaw = None
+        return payload
 
     def _back_off_target(self) -> float:
         return self.grid.clearance + BACK_OFF_MARGIN

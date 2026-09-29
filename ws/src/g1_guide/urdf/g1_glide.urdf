@@ -952,6 +952,40 @@
       </camera>
     </sensor>
   </gazebo>
+  <link name="front_camera_link" />
+  <joint name="front_camera_joint" type="fixed">
+    <origin xyz="0.09 0.0 0.50" rpy="0 0 0" />
+    <parent link="torso_link" />
+    <child link="front_camera_link" />
+  </joint>
+  <link name="front_camera_optical_frame" />
+  <joint name="front_camera_optical_joint" type="fixed">
+    <parent link="front_camera_link" />
+    <child link="front_camera_optical_frame" />
+    <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679" />
+  </joint>
+  <gazebo reference="front_camera_link">
+    <sensor name="front_camera" type="camera">
+      <always_on>true</always_on>
+      <visualize>false</visualize>
+      <update_rate>10</update_rate>
+      <topic>/front_camera/image</topic>
+      <gz_frame_id>front_camera_optical_frame</gz_frame_id>
+      <camera>
+        <horizontal_fov>1.2217304764</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>30.0</far>
+        </clip>
+        <camera_info_topic>/front_camera/camera_info</camera_info_topic>
+      </camera>
+    </sensor>
+  </gazebo>
   <link name="nav_lidar_link" />
   <joint name="nav_lidar_joint" type="fixed">
     <origin xyz="0 0 0.47" rpy="0 0 0" />

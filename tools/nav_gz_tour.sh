@@ -10,8 +10,12 @@ export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH MESA_D3D12_DEFAULT_ADAP
 export ROS_DOMAIN_ID=83 GZ_PARTITION=navlock
 SCENE=${SCENE:-/mnt/d/g1_guide/ws/src/g1_guide/config/exhibition_simple.json}
 out=/mnt/d/g1_guide/.navrun/$1; rm -rf $out; mkdir -p $out; cd $out; shift
-ros2 launch g1_guide exhibition_nav.launch.py headless:=true scene_config:=$SCENE > launch.log 2>&1 &
+# 独立进程组，结束时只杀自己这一组（同一 WSL 里可能有别的会话在跑仿真）
+setsid ros2 launch g1_guide exhibition_nav.launch.py headless:=true scene_config:=$SCENE > launch.log 2>&1 &
 LP=$!
+# 每秒记录速度和实时率，用来判断"变慢"是导航的问题还是仿真本身变慢
+setsid python3 /mnt/d/g1_guide/tools/nav_speed_log.py > speed.log 2>&1 &
+SP=$!
 sleep 40
 for k in "$@"; do
   case $k in
@@ -44,5 +48,5 @@ PY
   done
   echo "goal $k -> $last after $((SECONDS-t0))s"
 done
-kill $LP; sleep 5; pkill -f "gz sim"; pkill -f exhibition_nav; pkill -f gesture_player; sleep 2
+kill -INT -- -$LP -$SP 2>/dev/null; sleep 5; kill -9 -- -$LP -$SP 2>/dev/null; sleep 1
 grep -o '"state": "[a-z_]*", "goal_key": "[0-9]"' launch.log | uniq -c

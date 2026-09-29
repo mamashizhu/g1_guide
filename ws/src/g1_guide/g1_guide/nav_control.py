@@ -19,7 +19,10 @@ REVERSE_SPEED = 0.15
 REAR_STOP_DISTANCE = 0.60
 ARRIVAL_DISTANCE = 0.25
 ARRIVAL_YAW_ERROR = 0.20
-TURN_IN_PLACE_ERROR = 0.35
+# Beyond this heading error the robot stops and turns in place; below it,
+# it drives while turning, slowed by cos(error).  0.35 rad stopped at nearly
+# every kink of the grid path.
+TURN_IN_PLACE_ERROR = 0.8
 _HEADING_GAIN = 1.5
 
 
@@ -161,11 +164,11 @@ def _compute_validated(
     if abs(heading_error) > TURN_IN_PLACE_ERROR:
         return Velocity(0.0, angular, "aligning")
 
-    # Linear speed tapers only when closing on the goal. Path waypoints are
-    # ~0.2 m apart, so tapering on the waypoint would cap cruising speed near
-    # 0.3 m/s; sharp corners still stop and turn in place above.
+    # Linear speed tapers only when closing on the goal, not on each path
+    # vertex; sharp corners still stop and turn in place above.
     target_distance = math.hypot(target_dx, target_dy)
     linear = min(MAX_LINEAR_SPEED, target_distance if final else goal_distance)
+    linear *= math.cos(heading_error)
     return Velocity(linear, angular, "moving")
 
 

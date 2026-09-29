@@ -23,8 +23,10 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QGridLayout, 
                                QWidget)
 
 from config import load_settings
+from crowd import describe
 from dialog import AUDIENCES
-from engine import GuideEngine
+from robot import PRESENT_MODES
+from engine import WAKE_MODES, GuideEngine
 
 STATE_STYLE = {
     "listening": ("倾听中", "#2e7d32"),
@@ -39,6 +41,7 @@ NAV_STATE = {
     "unknown": "未知", "requested": "收到目标", "moving": "移动中", "aligning": "调整朝向",
     "arrived": "已到达", "blocked": "路线受阻", "backing_up": "后退避让", "cancelled": "已停止", "invalid_goal": "目标无效",
     "sensor_stale": "传感器中断", "invalid_command": "指令异常",
+    "facing": "转向观众", "faced": "已面向观众",
 }
 
 
@@ -98,6 +101,8 @@ class GuideWindow(QMainWindow):
         status.addWidget(QLabel("机器人"), 3, 0)
         status.addWidget(self.robot_label, 3, 1)
         status.addWidget(self.nav_label, 4, 0, 1, 2)
+        self.people_label = QLabel()
+        status.addWidget(self.people_label, 5, 0, 1, 2)
         status_box = QGroupBox("状态")
         status_box.setLayout(status)
 
@@ -129,11 +134,34 @@ class GuideWindow(QMainWindow):
         style_row.addWidget(QLabel("幽默"))
         style_row.addWidget(self.humor, 1)
         style_row.addWidget(self.humor_label)
+        self.present = QComboBox()
+        for key, name in PRESENT_MODES.items():
+            self.present.addItem(name, key)
+        self.present.currentIndexChanged.connect(
+            lambda _: engine.set_present_mode(self.present.currentData()))
+        self.crowd_box = QCheckBox("按雷达人数讲解：没人不讲、自动判断儿童、人走光告别（需 lidar:=mid360）")
+        self.crowd_box.setChecked(engine.crowd_enabled)
+        self.crowd_box.toggled.connect(lambda on: setattr(engine, "crowd_enabled", on))
+        self.wake_mode = QComboBox()
+        for key, name in WAKE_MODES.items():
+            self.wake_mode.addItem(name, key)
+        self.wake_mode.setToolTip("视觉唤醒：说唤醒词时，前置相机要看到 3 m 内有人面向机器人"
+                                  "（需要运行 vision/watch.py）；没有相机数据时按直接唤醒处理")
+        self.wake_mode.currentIndexChanged.connect(
+            lambda _: engine.set_wake_mode(self.wake_mode.currentData()))
+        present_row = QHBoxLayout()
+        present_row.addWidget(QLabel("到站后"))
+        present_row.addWidget(self.present)
+        present_row.addWidget(QLabel("唤醒"))
+        present_row.addWidget(self.wake_mode)
+        present_row.addStretch(1)
         options = QVBoxLayout()
         options.addWidget(self.mic_box)
         options.addWidget(self.barge_box)
         options.addWidget(self.wake_box)
         options.addLayout(style_row)
+        options.addLayout(present_row)
+        options.addWidget(self.crowd_box)
         options_box = QGroupBox("选项")
         options_box.setLayout(options)
 
@@ -260,9 +288,20 @@ class GuideWindow(QMainWindow):
             distance = status.get("distance_m")
             far = f"　剩余 {distance:.1f} m" if isinstance(distance, (int, float)) else ""
             self.nav_label.setText(f"导航：{state}{target}{far}")
+            people = robot.people_near()
+            text = ("雷达观众：无数据（简化雷达版没有人群感知）" if people is None
+                    else f"雷达观众：{describe(people)}")
+            if robot.vision_live:
+                vision = robot.vision
+                text += (f"　相机：{len(vision.get('persons', ()))} 人，"
+                         f"{len(vision.get('facing_near', ()))} 人面向机器人")
+            else:
+                text += "　相机：无数据"
+            self.people_label.setText(text)
         else:
             pill(self.robot_label, "未连接", "#757575")
             self.nav_label.setText("导航：—（在 WSL 启动 rosbridge 后重开本窗口）")
+            self.people_label.setText("")
 
     def closeEvent(self, event) -> None:
         self.timer.stop()

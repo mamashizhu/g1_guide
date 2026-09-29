@@ -301,6 +301,60 @@ def _add_camera(root: ET.Element) -> None:
     root.append(gazebo)
 
 
+# Add-on USB camera (PLAN M5): the head D435i looks 47.6 deg down (official
+# mount) and never sees faces, raised hands or wall paintings, so a plain
+# webcam is fixed level on the forehead above it.  Real robot: any UVC camera
+# on the Orin NX, published as the same /front_camera topics.
+FRONT_CAMERA_XYZ = "0.09 0.0 0.50"   # on torso_link, ~1.34 m above the floor
+FRONT_CAMERA_HFOV = "1.2217304764"   # 70 deg, a typical webcam
+FRONT_CAMERA_RATE = "10"
+
+
+def _add_front_camera(root: ET.Element) -> None:
+    if "front_camera_link" in _link_names(root):
+        raise ValueError("The source URDF already contains front_camera_link")
+    _ensure_sensor_mount(root, link_name="front_camera_link", joint_name="front_camera_joint",
+                         parent_link="torso_link", xyz=FRONT_CAMERA_XYZ)
+    optical_link = _element("link", {"name": "front_camera_optical_frame"})
+    root.append(optical_link)
+    optical_joint = _element("joint", {"name": "front_camera_optical_joint", "type": "fixed"})
+    optical_joint.append(_element("parent", {"link": "front_camera_link"}))
+    optical_joint.append(_element("child", {"link": "front_camera_optical_frame"}))
+    optical_joint.append(_element("origin", {"xyz": "0 0 0",
+                                             "rpy": "-1.57079632679 0 -1.57079632679"}))
+    root.append(optical_joint)
+
+    gazebo = _element("gazebo", {"reference": "front_camera_link"})
+    sensor = _element("sensor", {"name": "front_camera", "type": "camera"})
+    for tag, text in (("always_on", "true"), ("visualize", "false"),
+                      ("update_rate", FRONT_CAMERA_RATE), ("topic", "/front_camera/image"),
+                      ("gz_frame_id", "front_camera_optical_frame")):
+        child = _element(tag)
+        child.text = text
+        sensor.append(child)
+    camera = _element("camera")
+    fov = _element("horizontal_fov")
+    fov.text = FRONT_CAMERA_HFOV
+    camera.append(fov)
+    image = _element("image")
+    for tag, text in (("width", "640"), ("height", "480"), ("format", "R8G8B8")):
+        child = _element(tag)
+        child.text = text
+        image.append(child)
+    camera.append(image)
+    clip = _element("clip")
+    near, far = _element("near"), _element("far")
+    near.text, far.text = "0.05", "30.0"
+    clip.extend([near, far])
+    camera.append(clip)
+    info = _element("camera_info_topic")
+    info.text = "/front_camera/camera_info"
+    camera.append(info)
+    sensor.append(camera)
+    gazebo.append(sensor)
+    root.append(gazebo)
+
+
 def _ensure_sensor_mount(
     root: ET.Element,
     *,
@@ -637,6 +691,7 @@ def generate(source_path: Path, output_path: Path, g1_ws: Path,
     _freeze_joints(root, keep=arm_joints)
     _ensure_base_link(root)
     _add_camera(root)
+    _add_front_camera(root)
     _add_lidar_and_imu(root, lidar_model)
     _add_motion_plugins(root, truth_odom=lidar_model == "mid360")
     _add_arm_control(root, arm_joints)

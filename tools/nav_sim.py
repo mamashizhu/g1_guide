@@ -11,6 +11,11 @@
   python3 tools/nav_sim.py --tour 1 3 5 2 -v     # 从出生点依次去这些展位，打印状态变化
   python3 tools/nav_sim.py --tour 3 --box 0.5,0  # 额外放 0.8 m 箱子（可多个）
   python3 tools/nav_sim.py --tour 3 --box-ahead 2:1.3   # 第 2 秒时在机器人正前方 1.3 m 放箱子
+  python3 tools/nav_sim.py --face --people-at-stations  # 讲解模式「面向观众」：每个展位旁站一个人（PLAN M5.3）
+  python3 tools/nav_sim.py --tour 3 --face --person 1,2  # 指定位置放人（0.5×0.4 m，雷达可见）
+
+人按 /guide/people 的形式直接喂给 NavigatorCore（位置取真值，不经过 people_core）。
+面向观众模式下，到站后机器人朝向与 3 m 内人群中心的夹角 > 10° 判为失败。
 
 判定：到达 = arrived；卡死 = 连续 20 s（仿真时间）没离开半径 0.5 m 的范围；
 超时 = 150 s 未到；碰撞 = 机器人中心离障碍物表面 < 0.30 m。
@@ -43,6 +48,8 @@ BEAMS = 360
 RANGE_MIN, RANGE_MAX = 0.12, 8.0
 LIDAR_ABOVE_BASE = 0.47  # nav_lidar_joint
 BOX_SIZE = 0.8           # tools/spawn_box.sh 的箱子
+PERSON_SIZE = (0.5, 0.4)
+FACE_ERROR_MAX = 10.0    # deg
 BODY_RADIUS = 0.30
 STUCK_WINDOW, STUCK_RADIUS, LEG_TIMEOUT = 20.0, 0.5, 150.0
 
@@ -97,8 +104,25 @@ def box_at(x: float, y: float) -> tuple[float, float, float, float]:
     return (x-h, y-h, x+h, y+h)
 
 
+def people_at_stations(config: dict, all_boxes: np.ndarray) -> list[tuple[float, float]]:
+    """One visitor 1.8 m from each station, off to the side, on free floor."""
+    people = []
+    for exhibit in config["exhibits"]:
+        station = exhibit["station"]
+        for offset in (150, -150, 120, -120, 90, -90, 180):
+            angle = float(station["yaw"]) + math.radians(offset)
+            x = float(station["x"]) + 1.8*math.cos(angle)
+            y = float(station["y"]) + 1.8*math.sin(angle)
+            if surface_distance(all_boxes, x, y) > 0.6:
+                people.append((round(x, 2), round(y, 2)))
+                break
+    return people
+
+
 class Sim:
-    def __init__(self, scene: str, boxes: list[tuple[float, float]], box_ahead=None):
+    def __init__(self, scene: str, boxes: list[tuple[float, float]], box_ahead=None,
+                 people: list[tuple[float, float]] = (), face: bool = False,
+                 people_at_stations_: bool = False):
         self.config = load_scene(SCENES[scene])
         spawn = self.config["spawn"]
         self.pose = Pose2D(float(spawn["x"]), float(spawn["y"]), float(spawn["yaw"]))
@@ -109,6 +133,13 @@ class Sim:
         self.box_ahead = box_ahead  # (sim time, distance) or None
         stations = {e["station"]["key"]: e["station"] for e in self.config["exhibits"]}
         self.core = NavigatorCore(self.config, stations)
+        self.people: list[tuple[float, float]] = []
+        if people_at_stations_:
+            people = [*people, *people_at_stations(self.config, self.all_boxes)]
+        for px, py in people:
+            self.add_person(px, py)
+        if face:
+            self.core.set_present_mode("face")
         self.t = 0.0
         self.next_scan = 0.0
 
@@ -117,6 +148,23 @@ class Sim:
         self.all_boxes = np.vstack([self.all_boxes, box])
         self.seen_boxes = np.vstack([self.seen_boxes, box])
 
+    def add_person(self, x: float, y: float) -> None:
+        w, d = PERSON_SIZE[0]/2, PERSON_SIZE[1]/2
+        box = np.array([(x-w, y-d, x+w, y+d)])
+        self.all_boxes = np.vstack([self.all_boxes, box])
+        self.seen_boxes = np.vstack([self.seen_boxes, box])
+        self.people.append((x, y))
+
+    def face_error(self) -> float | None:
+        """Degrees between the heading and the people within 3 m; None if nobody."""
+        near = [(x, y) for x, y in self.people
+                if math.hypot(x-self.pose.x, y-self.pose.y) <= 3.0]
+        if not near:
+            return None
+        cx, cy = sum(x for x, _ in near)/len(near), sum(y for _, y in near)/len(near)
+        error = math.atan2(cy-self.pose.y, cx-self.pose.x) - self.pose.yaw
+        return abs(math.degrees(math.atan2(math.sin(error), math.cos(error))))
+
     def scan(self) -> None:
         angles, ranges = cast(self.seen_boxes, self.pose.x, self.pose.y)
         keep = (ranges >= RANGE_MIN) & (ranges <= RANGE_MAX)
@@ -124,7 +172,9 @@ class Sim:
         # which is the same set of rays for a full 360° scan.
         points = [(self.pose.x + r*math.cos(a), self.pose.y + r*math.sin(a))
                   for a, r in zip(angles[keep], ranges[keep])]
-        self.core.set_scan(points, (self.pose.x, self.pose.y))
+        self.core.set_scan(points, (self.pose.x, self.pose.y), self.t)
+        self.core.set_people([{"x": x, "y": y} for x, y in self.people
+                              if math.hypot(x-self.pose.x, y-self.pose.y) <= 6.0], self.t)
 
     def leg(self, key: str, verbose: bool) -> dict:
         status = self.core.set_goal(key)
@@ -157,6 +207,13 @@ class Sim:
                     last_state = state
                 if state == "arrived":
                     result = "arrived"
+                    if self.core.present_mode == "face":
+                        error = self.face_error()
+                        history.append(f"  到站：3 m 内 {status.get('people_near')} 人，"
+                                       f"面向={status.get('faced')}，朝向误差 "
+                                       f"{'—' if error is None else f'{error:.1f}°'}")
+                        if error is not None and error > FACE_ERROR_MAX:
+                            result = "not_facing"
                     break
             v, w = command.linear_x, command.angular_z
             yaw = self.pose.yaw + w*DT
@@ -179,16 +236,27 @@ class Sim:
         out = dict(key=key, result=result, sim_s=round(self.t-start_t, 1), path_m=round(travelled, 1),
                    min_surface_m=round(min_surface, 2), states=states,
                    pose=(round(self.pose.x, 2), round(self.pose.y, 2), round(math.degrees(self.pose.yaw))))
+        if self.core.present_mode == "face" and result == "arrived":
+            error = self.face_error()
+            out["face"] = "—" if error is None else f"{error:.1f}°"
         if verbose or result != "arrived":
             out["history"] = history
         return out
 
 
+TOTALS = {"sim_s": 0.0, "path_m": 0.0, "aligning": 0}
+
+
 def report(label: str, leg: dict) -> bool:
+    TOTALS["sim_s"] += leg["sim_s"]
+    TOTALS["path_m"] += leg["path_m"]
+    TOTALS["aligning"] += leg["states"].get("aligning", 0)
     ok = leg["result"] == "arrived"
     mark = "OK " if ok else "!! "
-    print(f"{mark}{label:12s} {leg['result']:9s} {leg['sim_s']:6.1f}s  路程 {leg['path_m']:5.1f} m  "
-          f"最近障碍 {leg['min_surface_m']:.2f} m  终点位姿 {leg['pose']}  {leg['states']}")
+    speed = leg['path_m'] / leg['sim_s'] if leg['sim_s'] else 0.0
+    print(f"{mark}{label:12s} {leg['result']:9s} {leg['sim_s']:6.1f}s  路程 {leg['path_m']:5.1f} m  均速 {speed:.2f}  "
+          f"最近障碍 {leg['min_surface_m']:.2f} m  终点位姿 {leg['pose']}  {leg['states']}"
+          + (f"  朝向人群误差 {leg['face']}" if "face" in leg else ""))
     for line in leg.get("history", [])[-25:]:
         print(line)
     return ok
@@ -200,14 +268,19 @@ def main() -> int:
     parser.add_argument("--tour", nargs="*", help="从出生点依次前往的展位；不给则测所有两两组合")
     parser.add_argument("--box", action="append", default=[], help="x,y：放一个 0.8 m 箱子")
     parser.add_argument("--box-ahead", help="t:d：第 t 秒在机器人正前方 d 米放箱子（只用于 --tour）")
+    parser.add_argument("--person", action="append", default=[], help="x,y：放一个人")
+    parser.add_argument("--people-at-stations", action="store_true", help="每个展位旁放一个人")
+    parser.add_argument("--face", action="store_true", help="讲解模式「面向观众」")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
+    people = [tuple(map(float, p.split(","))) for p in args.person]
+    extra = dict(people=people, face=args.face, people_at_stations_=args.people_at_stations)
     boxes = [tuple(map(float, b.split(","))) for b in args.box]
     ahead = tuple(map(float, args.box_ahead.split(":"))) if args.box_ahead else None
     wall = time.monotonic()
     failures = 0
     if args.tour is not None:
-        sim = Sim(args.scene, boxes, ahead)
+        sim = Sim(args.scene, boxes, ahead, **extra)
         previous = "出生点"
         for key in args.tour:
             failures += not report(f"{previous}→{key}", sim.leg(key, args.verbose))
@@ -215,13 +288,16 @@ def main() -> int:
     else:
         keys = sorted(e["station"]["key"] for e in load_scene(SCENES[args.scene])["exhibits"])
         for key in keys:
-            failures += not report(f"出生点→{key}", Sim(args.scene, boxes).leg(key, args.verbose))
+            failures += not report(f"出生点→{key}", Sim(args.scene, boxes, **extra).leg(key, args.verbose))
         for a, b in itertools.permutations(keys, 2):
-            sim = Sim(args.scene, boxes)
+            sim = Sim(args.scene, boxes, **extra)
             if sim.leg(a, False)["result"] != "arrived":
                 print(f"-- {a}→{b}        跳过（出生点→{a} 已失败）")
                 continue
             failures += not report(f"{a}→{b}", sim.leg(b, args.verbose))
+    if TOTALS["sim_s"]:
+        print(f"\n合计：仿真 {TOTALS['sim_s']:.0f} s，路程 {TOTALS['path_m']:.0f} m，"
+              f"平均 {TOTALS['path_m']/TOTALS['sim_s']:.2f} m/s，原地转身 {TOTALS['aligning']} 次")
     print(f"\n{'全部通过' if not failures else f'{failures} 段失败'}，墙钟 {time.monotonic()-wall:.1f} s")
     return 1 if failures else 0
 

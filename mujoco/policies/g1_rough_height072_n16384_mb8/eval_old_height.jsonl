@@ -1,0 +1,2 @@
+{"terrain": "flat", "value": 0.0, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.58, "goal_dist": 3.0, "base_height": 0.49}
+{"terrain": "stairs_up", "value": 0.18, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.94, "goal_dist": 3.2, "base_height": 0.56}

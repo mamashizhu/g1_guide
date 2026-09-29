@@ -6,7 +6,10 @@
     "name": "exhibition_hall",
     "model_uri": "https://fuel.gazebosim.org/1.0/OpenRobotics/models/iscas_museum",
     "pose": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    "note": "ISCAS museum mesh (CC-BY 4.0). Walls only: the floor below is generated here."
+    "collision": "baked",
+    "mesh_uri": "https://fuel.gazebosim.org/1.0/openrobotics/models/iscas_museum/1/files/meshes/ISCAS_museum.dae",
+    "mesh_pose": [0.0, 0.0, 0.0, 0.0, 0.0, -1.57],
+    "note": "ISCAS museum mesh (CC-BY 4.0). Walls only: the floor below is generated here. collision=baked: shows the mesh, collides with the baked nav_obstacles boxes (the mesh collision held the real-time factor near 0.2); mesh_uri/mesh_pose copy the Fuel model.sdf."
   },
   "nav_obstacles_file": "hall_nav_obstacles.json",
   "room": {"width": 22.0, "depth": 24.0, "wall_height": 4.0, "wall_thickness": 0.02, "floor_top": 0.0},

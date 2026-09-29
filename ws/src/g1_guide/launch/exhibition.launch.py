@@ -27,6 +27,8 @@ def _launch(context):
         "ros_topic_name": "/exhibition/overview", "gz_topic_name": "/exhibition/overview",
         "ros_type_name": "sensor_msgs/msg/Image", "gz_type_name": "gz.msgs.Image",
         "direction": "GZ_TO_ROS", "frame_id": "exhibition_overview",
+        # Rendered only while someone subscribes (see config/bridge.yaml).
+        "lazy": True,
     }]), encoding="utf-8")
     spawn = config["spawn"]
     return [IncludeLaunchDescription(
@@ -34,6 +36,8 @@ def _launch(context):
         launch_arguments={
             "world": str(world),
             "headless": LaunchConfiguration("headless").perform(context),
+            "gui_render": LaunchConfiguration("gui_render").perform(context),
+            "camera_rate": LaunchConfiguration("camera_rate").perform(context),
             "spawn_x": str(spawn["x"]), "spawn_y": str(spawn["y"]),
             "spawn_z": str(spawn["z"]), "spawn_yaw": str(spawn["yaw"]),
         }.items(),
@@ -46,5 +50,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("scene_config", default_value=str(share / "config/exhibition.json")),
         DeclareLaunchArgument("headless", default_value="false"),
+        DeclareLaunchArgument("gui_render", default_value="gpu"),
+        DeclareLaunchArgument("camera_rate", default_value="10"),
         OpaqueFunction(function=_launch),
     ])

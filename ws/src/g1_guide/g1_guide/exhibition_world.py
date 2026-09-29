@@ -143,6 +143,14 @@ def validate_layout(config: dict) -> None:
         model_names.add(hall_name)
         _text(hall.get("model_uri"), "hall.model_uri")
         _vector(hall.get("pose"), 6, "hall.pose")
+        collision = hall.get("collision", "mesh")
+        if collision not in ("mesh", "baked"):
+            _fail("hall.collision", "must be 'mesh' or 'baked'")
+        if collision == "baked":
+            _text(hall.get("mesh_uri"), "hall.mesh_uri")
+            _vector(hall.get("mesh_pose", [0, 0, 0, 0, 0, 0]), 6, "hall.mesh_pose")
+            if not root.get("nav_obstacles"):
+                _fail("hall.collision", "'baked' needs the baked nav_obstacles (load the scene with load_scene)")
 
     spawn = _mapping(root.get("spawn"), "spawn")
     spawn_position = [_number(spawn.get(name), f"spawn.{name}")
@@ -518,11 +526,36 @@ def _vase_model(exhibit: Mapping[str, Any], position: Sequence[float]) -> str:
                   f"<link name=\"link\">{''.join(pieces)}</link>")
 
 
-def _hall_model(hall: Mapping[str, Any]) -> str:
-    """Include the imported hall mesh; it supplies the walls this world skips."""
-    return (f"<include><name>{escape(str(hall['name']))}</name>"
-            f"<uri>{escape(str(hall['model_uri']))}</uri>"
-            f"<pose>{_pose(hall['pose'])}</pose><static>true</static></include>")
+def _hall_model(hall: Mapping[str, Any], nav_obstacles: Sequence[Mapping[str, Any]],
+                floor_top: float, wall_height: float) -> str:
+    """The imported hall mesh; it supplies the walls this world skips.
+
+    ``collision: mesh`` includes the Fuel model as is, whose collision is the
+    whole 8 MB visual mesh.  Checking the robot's ~20 link meshes against it
+    every physics step held the real-time factor near 0.2 wherever the walls
+    were detailed.  ``collision: baked`` shows the same mesh but collides
+    with the baked wall rectangles instead (the ones the planner uses).  The
+    lidar renders the visual, so what it sees is unchanged.
+    """
+    name = escape(str(hall["name"]))
+    if hall.get("collision", "mesh") == "mesh":
+        return (f"<include><name>{name}</name>"
+                f"<uri>{escape(str(hall['model_uri']))}</uri>"
+                f"<pose>{_pose(hall['pose'])}</pose><static>true</static></include>")
+    height = float(wall_height)
+    walls = []
+    for index, item in enumerate(nav_obstacles):
+        x, y = (float(v) for v in item["position"][:2])
+        sx, sy = (float(v) for v in item["size"][:2])
+        walls.append(f"<collision name=\"wall_{index}\"><pose>{_pose((x, y, floor_top + height / 2, 0, 0, 0))}</pose>"
+                     f"{_geometry_box((sx, sy, height))}</collision>")
+    mesh_pose = hall.get("mesh_pose", (0, 0, 0, 0, 0, 0))
+    visual = (f"<visual name=\"visual\"><pose>{_pose(mesh_pose)}</pose><geometry><mesh>"
+              f"<uri>{escape(str(hall['mesh_uri']))}</uri></mesh></geometry></visual>")
+    # The baked rectangles are in world coordinates; the model sits at the
+    # origin so the collision boxes need no transform.
+    return (_model(str(hall["name"]), hall["pose"], f"<link name=\"link\">{visual}</link>")
+            + _model(f"{hall['name']}_walls", (0, 0, 0), f"<link name=\"link\">{''.join(walls)}</link>"))
 
 
 def _static_person_model(person: Mapping[str, Any]) -> str:
@@ -644,7 +677,7 @@ def generate_world(config: dict, asset_root: Path) -> str:
             lines.append("    " + _box_model(name, position, size,
                                               _material((0.64, 0.67, 0.72, 1.0), ambient=False)))
     else:
-        lines.append("    " + _hall_model(hall))
+        lines.append("    " + _hall_model(hall, root.get("nav_obstacles", ()), floor_top, wall_height))
 
     for exhibit in root["exhibits"]:
         position = exhibit["position"]

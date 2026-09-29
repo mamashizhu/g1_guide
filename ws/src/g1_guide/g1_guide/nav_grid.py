@@ -102,6 +102,23 @@ class _DynamicPointIndex:
                         return True
         return False
 
+    def segment_blocks(self, start: tuple[float, float], end: tuple[float, float]) -> bool:
+        """Exact test: is any point within the radius of the segment?"""
+        if not self._buckets:
+            return False
+        (ax, ay), (bx_, by_) = start, end
+        dx, dy = bx_ - ax, by_ - ay
+        length2 = dx * dx + dy * dy
+        reach = int(math.ceil(math.sqrt(length2) / 2 / self._bucket_size)) + 1
+        mx, my = self._key((ax + bx_) / 2, (ay + by_) / 2)
+        for ix in range(mx - reach, mx + reach + 1):
+            for iy in range(my - reach, my + reach + 1):
+                for px, py in self._buckets.get((ix, iy), ()):
+                    t = 0.0 if length2 == 0.0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length2))
+                    if (ax + t * dx - px) ** 2 + (ay + t * dy - py) ** 2 <= self._radius2 + 1e-12:
+                        return True
+        return False
+
 
 class OccupancyGrid:
     """2-D collision grid built from the exhibition JSON-compatible mapping.
@@ -161,6 +178,8 @@ class OccupancyGrid:
                 self._rectangles.append(rectangle)
         self._index = _RectangleIndex(self._rectangles, self.clearance)
 
+        # Static geometry never changes: A* edge checks against it are cached.
+        self._static_edges: dict[tuple[tuple[int, int], tuple[int, int]], bool] = {}
         self._blocked = {
             (ix, iy)
             for ix in range(self._nx)
@@ -224,6 +243,23 @@ class OccupancyGrid:
             start[1] + (end[1] - start[1]) * i / steps, dynamic_index)
             for i in range(steps + 1))
 
+    def _static_segment_clear(self, start: tuple[float, float], end: tuple[float, float]) -> bool:
+        distance = math.hypot(end[0] - start[0], end[1] - start[1])
+        steps = max(1, int(math.ceil(distance / (self.resolution / 8))))
+        return all(self._static_clear(
+            start[0] + (end[0] - start[0]) * i / steps,
+            start[1] + (end[1] - start[1]) * i / steps)
+            for i in range(steps + 1))
+
+    def _edge_clear(self, current: tuple[int, int], neighbor: tuple[int, int],
+                    dynamic_index: _DynamicPointIndex) -> bool:
+        key = (current, neighbor) if current <= neighbor else (neighbor, current)
+        static = self._static_edges.get(key)
+        a, b = self._cell_to_world(current), self._cell_to_world(neighbor)
+        if static is None:
+            static = self._static_edges[key] = self._static_segment_clear(a, b)
+        return static and not dynamic_index.segment_blocks(a, b)
+
     def _nearest_connectable(self, point: tuple[float, float],
                              dynamic: _DynamicPointIndex) -> tuple[int, int] | None:
         if not self._clear_with_dynamic(*point, dynamic):
@@ -239,6 +275,68 @@ class OccupancyGrid:
                 if cell not in self._blocked and self._clear_with_dynamic(*world, dynamic) and self._segment_clear(point, world, dynamic):
                     candidates.append((math.dist(point, world), cell))
         return min(candidates)[1] if candidates else None
+
+    def _line_clear(self, start: tuple[float, float], end: tuple[float, float],
+                    dynamic_index: _DynamicPointIndex) -> bool:
+        """Straight segment clear of static geometry (sampled every 5 cm) and
+        of dynamic points (exact distance), with the full robot clearance."""
+        distance = math.hypot(end[0] - start[0], end[1] - start[1])
+        steps = max(1, int(math.ceil(distance / (self.resolution / 4))))
+        if not all(self._static_clear(start[0] + (end[0] - start[0]) * i / steps,
+                                      start[1] + (end[1] - start[1]) * i / steps)
+                   for i in range(steps + 1)):
+            return False
+        return not dynamic_index.segment_blocks(start, end)
+
+    def shortcut(self, path: Sequence[tuple[float, float]],
+                 dynamic_points: Iterable[Any] = ()) -> list[tuple[float, float]]:
+        """Drop grid vertices while the straight line to a later one stays clear.
+
+        A* on an 8-connected grid returns a staircase of 0.2 m steps with 45°
+        kinks; following it meant stopping to turn every few steps.  The
+        result keeps only real corners and is exactly as clear as the input.
+        """
+        points = [tuple(map(float, point)) for point in path]
+        dynamic = self._dynamic(dynamic_points)
+        if len(points) < 3 or dynamic is None:
+            return points
+        dynamic_index = _DynamicPointIndex(dynamic, self.clearance)
+        result = [points[0]]
+        i = 0
+        while i < len(points) - 1:
+            j = i + 1
+            while j + 1 < len(points) and self._line_clear(points[i], points[j + 1], dynamic_index):
+                j += 1
+            result.append(points[j])
+            i = j
+        return result
+
+    def path_blocked(self, path: Sequence[tuple[float, float]], dynamic_points: Iterable[Any],
+                     robot: tuple[float, float], horizon: float = 4.0) -> bool:
+        """Whether dynamic points now cut the next ``horizon`` metres of path.
+
+        Points within the clearance of ``robot`` are left out: the robot is
+        already next to them and the controller's forward gate handles them;
+        counting them would replan on every scan.
+        """
+        dynamic = self._dynamic(dynamic_points)
+        if dynamic is None:
+            return True
+        far = tuple(p for p in dynamic
+                    if math.hypot(p[0] - robot[0], p[1] - robot[1]) > self.clearance)
+        dynamic_index = _DynamicPointIndex(far, self.clearance)
+        remaining = horizon
+        for start, end in zip(path, path[1:]):
+            length = math.hypot(end[0] - start[0], end[1] - start[1])
+            if length > remaining:
+                scale = remaining / length
+                end = (start[0] + (end[0] - start[0]) * scale, start[1] + (end[1] - start[1]) * scale)
+            if dynamic_index.segment_blocks(start, end):
+                return True
+            remaining -= length
+            if remaining <= 0.0:
+                break
+        return False
 
     def plan(self, start: Any, goal: Any,
              dynamic_points: Iterable[Any] = ()) -> list[tuple[float, float]] | None:
@@ -278,11 +376,7 @@ class OccupancyGrid:
                     continue
                 if neighbor in self._blocked:
                     continue
-                wx, wy = self._cell_to_world(neighbor)
-                if not self._clear_with_dynamic(wx, wy, dynamic_index):
-                    continue
-                current_world = self._cell_to_world(current)
-                if not self._segment_clear(current_world, (wx, wy), dynamic_index):
+                if not self._edge_clear(current, neighbor, dynamic_index):
                     continue
                 if dx and dy:
                     side_a, side_b = (current[0] + dx, current[1]), (current[0], current[1] + dy)

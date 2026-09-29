@@ -1,0 +1,8 @@
+{"terrain": "stairs_up", "value": 0.1, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.17, "goal_dist": 3.2}
+{"terrain": "stairs_up", "value": 0.15, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.08, "goal_dist": 3.2}
+{"terrain": "stairs_up", "value": 0.18, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.99, "goal_dist": 3.2}
+{"terrain": "stairs_up", "value": 0.23, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 8.59, "goal_dist": 3.2}
+{"terrain": "stairs_down", "value": 0.15, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.92, "goal_dist": 3.2}
+{"terrain": "slope_up", "value": 10.0, "vx": 0.5, "robots": 64, "pass_rate": 0.984, "fall_rate": 0.0, "median_dist": 8.44, "goal_dist": 3.75}
+{"terrain": "slope_up", "value": 15.0, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 8.81, "goal_dist": 3.75}
+{"terrain": "slope_up", "value": 20.0, "vx": 0.5, "robots": 64, "pass_rate": 1.0, "fall_rate": 0.0, "median_dist": 9.04, "goal_dist": 3.75}

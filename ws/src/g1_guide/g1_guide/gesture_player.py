@@ -9,7 +9,8 @@ Output /g1/arm/<joint>/cmd_pos (std_msgs/Float64, bridged to Gazebo) and
 
 While /nav/status reports the robot moving, the arms are sent home and every
 other gesture is rejected.  With ``auto_point`` the guide points at the exhibit
-as soon as navigation reports ``arrived``.
+as soon as navigation reports ``arrived`` -- unless that status says the
+presentation mode is ``face`` (PLAN M5.5).
 """
 
 from __future__ import annotations
@@ -129,7 +130,9 @@ def main(args=None):
             was_moving, self.moving = self.moving, state in MOVING_STATES
             if self.moving and not was_moving:
                 self.play({"name": "home"})
-            if state == "arrived" and self.auto_point:
+            # 讲解模式「面向观众」: the guide faces the people and does not point.
+            if (state == "arrived" and self.auto_point
+                    and status.get("present_mode", "point") == "point"):
                 exhibit = self.by_station.get(str(status.get("goal_key")))
                 if exhibit is not None:
                     self.play({"name": "point", "exhibit": exhibit["exhibit_id"]})

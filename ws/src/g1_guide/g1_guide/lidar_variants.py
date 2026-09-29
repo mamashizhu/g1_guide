@@ -65,3 +65,19 @@ def shutdown_after(node) -> list:
 
     return [node, RegisterEventHandler(OnProcessExit(
         target_action=node, on_exit=[EmitEvent(event=Shutdown(reason="tour finished"))]))]
+
+
+def with_camera_rate(urdf: str, rate: float) -> str:
+    """Set the head RGBD camera's update rate in a generated model's text.
+
+    Every rendered frame costs time and, through the WSL d3d12 leak, makes
+    the next ones slower (see CLAUDE.md); 30 Hz RGB + depth dominated the
+    server's rendering.  A model without the camera is returned unchanged.
+    """
+    import re
+
+    rate = float(rate)
+    if not (rate > 0.0 and rate < 1000.0):
+        raise ValueError(f"camera_rate must be in (0, 1000) Hz, got {rate}")
+    return re.sub(r'(<sensor name="d435_rgbd"[^>]*>.*?<update_rate>)[^<]*(</update_rate>)',
+                  lambda m: f"{m[1]}{rate:g}{m[2]}", urdf, count=1, flags=re.S)

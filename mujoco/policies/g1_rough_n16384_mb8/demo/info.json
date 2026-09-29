@@ -1,0 +1,1 @@
+{"checkpoint": "/root/isaac/IsaacLab/logs/rsl_rl/g1_rough/2026-09-29_01-03-43_n16384_mb8/model_1499.pt", "terrains": ["stairs_up_0.18", "stairs_up_0.23", "slope_up_20", "stairs_down_0.15"], "robot_cols": [0, 1, 2, 3], "vx": 0.5}

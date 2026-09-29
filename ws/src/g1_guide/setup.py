@@ -46,6 +46,8 @@ setup(
             "mid360_to_scan = g1_guide.mid360_to_scan:main",
             "gesture_player = g1_guide.gesture_player:main",
             "odom_drift = g1_guide.odom_drift:main",
+            "people_tracker = g1_guide.people_tracker:main",
+            "camera_jpeg = g1_guide.camera_jpeg:main",
         ],
     },
 )

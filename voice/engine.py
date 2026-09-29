@@ -4,6 +4,7 @@ Threads:
 - turn worker: takes visitor text / robot events from ``inputs`` and runs one dialog turn
 - ear: microphone → VAD → ASR → ``inputs``; also watches for barge-in while the robot talks
 - rosbridge callbacks: robot status events → ``inputs``
+- crowd: lidar people (/guide/people) on arrival and while presenting, see crowd.py
 
 Barge-in (``barge_in=True``): while the robot speaks, speech on the microphone is
 transcribed every 0.4 s; when two polls in a row hear at least four characters that
@@ -22,12 +23,22 @@ import threading
 import time
 from typing import Callable
 
+import crowd
 from config import Settings
 from dialog import AUDIENCES, GuideDialog, Style, build_system_prompt, build_tools, event_message
 from exhibits import load_exhibits
 from fallback import BYE_WORDS, STOP_WORDS, RuleBackend, _has, normalize
 from llm import ResilientBackend, TurnCancelled, make_backend
-from robot import RobotLink
+from robot import PRESENT_MODES, RobotLink
+
+# 唤醒模式 (PLAN M5.9): direct = the wake word alone (the original behaviour);
+# vision = the wake word only counts while the front camera sees someone within
+# 3 m facing the robot.  Without vision data, vision mode falls back to direct.
+WAKE_MODES = {"direct": "直接唤醒", "vision": "视觉唤醒"}
+VISION_WAKE_WINDOW_S = 2.0
+# 手势 (PLAN M5.1, events from vision/gestures.py).  palm = stop works at any
+# time; the others only while awake and not talking (speech has priority).
+GESTURE_COUNTS = {"one": "1", "two": "2", "three": "3", "four": "4"}
 from tts import SentenceBuffer, Speaker, make_engine
 
 ECHO_OVERLAP = 0.5      # heard text sharing this much with the robot's recent words is echo
@@ -168,12 +179,20 @@ class GuideEngine:
 
         self.robot = RobotLink(self.exhibits, settings.rosbridge_host, settings.rosbridge_port,
                                on_event=self._on_robot_event, log=self.log)
+        self.robot.on_gesture = self.on_gesture
         self.use_robot = use_robot
         self.speaker = Speaker(make_engine(settings.tts_engine, settings.tts_voice)) if speak else NullSpeaker()
         self.style = style or Style()
         self.dialog = GuideDialog(self.backend, self.robot, log=self.log,
-                                  style=self.style, on_style=self._on_style)
+                                  style=self.style, on_style=self._on_style,
+                                  on_audience_request=self._on_audience_request)
+        self._audience_manual = False  # a visitor or the operator chose it: no auto change
         self._on_style(self.style)
+        # PLAN M5.5: lidar people drive arrival and goodbye when /guide/people is live.
+        self.crowd_enabled = True      # GUI toggle
+        self.present_mode = "point"    # GUI: "point" 指向展品 | "face" 面向观众
+        self.presenting = None         # exhibit being presented to a live audience
+        self._gone_since: float | None = None
         self.aec = None
         if listen and speak:
             try:
@@ -190,6 +209,8 @@ class GuideEngine:
         self.listener = None
         self.mic_enabled = True  # GUI toggle; barge_in may also be flipped at runtime
         self.wake_word = wake_word  # GUI toggle too
+        self.wake_mode = "direct"   # GUI: see WAKE_MODES
+        self._vision_fallback_logged = False
         self._awake_until = 0.0
         self._sleep_after_turn = False
         self._running = True
@@ -201,6 +222,8 @@ class GuideEngine:
         if self.use_robot:
             self.robot.connect()
         threading.Thread(target=self._turn_worker, daemon=True).start()
+        if self.use_robot:
+            threading.Thread(target=self._crowd_watch, daemon=True).start()
         if self.listen:
             threading.Thread(target=self._ear, daemon=True).start()
             self._ready.wait(timeout=30)
@@ -223,8 +246,20 @@ class GuideEngine:
             self.inputs.put(("user", text))
 
     def set_style(self, audience: str | None = None, humor: int | None = None) -> None:
+        """Operator (GUI) change; an audience chosen here is not auto-changed later."""
+        if audience is not None:
+            self._audience_manual = True
         self.style.update(audience, humor)
         self._on_style(self.style)
+
+    def set_present_mode(self, mode: str) -> None:
+        if mode in PRESENT_MODES:
+            self.present_mode = mode
+            self.robot.set_present_mode(mode)
+            self.log(f"[讲解模式] {PRESENT_MODES[mode]}")
+
+    def _on_audience_request(self, _audience: str) -> None:
+        self._audience_manual = True  # the visitor asked for it
 
     def _on_style(self, style: Style) -> None:
         tts = getattr(self.speaker, "engine", None)
@@ -233,9 +268,24 @@ class GuideEngine:
         self.log(f"[风格] {AUDIENCES[style.audience]}模式，幽默 {style.humor}/10")
 
     # ---- wake word ----
+    def set_wake_mode(self, mode: str) -> None:
+        if mode in WAKE_MODES:
+            self.wake_mode = mode
+            self._vision_fallback_logged = False
+            self.log(f"[唤醒模式] {WAKE_MODES[mode]}")
+
+    @property
+    def vision_gated(self) -> bool:
+        """Vision wake is on and has live camera data to decide with."""
+        return self.wake_mode == "vision" and self.robot.vision_live
+
+    @property
+    def wake_required(self) -> bool:
+        return self.wake_word or self.wake_mode == "vision"
+
     @property
     def awake(self) -> bool:
-        return not self.wake_word or time.monotonic() < self._awake_until
+        return not self.wake_required or time.monotonic() < self._awake_until
 
     def wake(self) -> None:
         self._awake_until = time.monotonic() + WAKE_IDLE_S
@@ -248,7 +298,7 @@ class GuideEngine:
                 self.wake()
         elif self._sleep_after_turn:
             self._sleep_after_turn = False
-            if self.wake_word:
+            if self.wake_required:
                 self._awake_until = 0.0
                 self.log("[休眠] 说“你好小吉”再叫醒我")
 
@@ -262,7 +312,7 @@ class GuideEngine:
 
     @property
     def state(self) -> str:
-        if self.wake_word and not self.awake:
+        if self.wake_required and not self.awake:
             return "sleeping"
         if self.speaker.busy:
             return "speaking"
@@ -279,7 +329,109 @@ class GuideEngine:
 
     # ---- turns ----
     def _on_robot_event(self, state: str, exhibit) -> None:
-        self.inputs.put(("event", event_message(state, exhibit)))
+        if state == "arrived" and self.crowd_enabled and self.robot.people_near() is not None:
+            threading.Thread(target=self._arrive, args=(exhibit,), daemon=True).start()
+            return
+        self.inputs.put(("event", event_message(state, exhibit, self.present_mode)))
+
+    # ---- gestures (PLAN M5.1) ----
+    def on_gesture(self, name: str) -> None:
+        if name == "palm":
+            self.log("[手势] 手掌：停止")
+            self.interrupt()
+            self.presenting = None
+            if self.robot.connected:
+                self.log(f"[手势] {self.robot.stop()}")
+            return
+        if not self.awake:
+            self.log(f"[手势] {name}：未唤醒，忽略")
+            return
+        if self.speaker.busy or self.turn_active.is_set():
+            self.log(f"[手势] {name}：正在说话，语音优先，忽略")
+            return
+        if name in GESTURE_COUNTS:
+            exhibit = self.robot.by_key.get(GESTURE_COUNTS[name])
+            if exhibit is None:
+                return
+            text = f"带我去看{exhibit.title}"
+        elif name == "thumbs_up":
+            text = "好的"
+        elif name == "wave":
+            text = "再见" if self.presenting is not None else "你好"
+        else:
+            return
+        self.log(f"[手势] {name} → {text}")
+        self.wake()
+        self.inputs.put(("user", text))
+
+    # ---- audience (PLAN M5.5) ----
+    def _arrive(self, exhibit, wait_s: float = crowd.FOLLOW_WAIT_S, poll_s: float = 0.2) -> None:
+        """Arrived: present only if someone is within 3 m, waiting a little for them."""
+        people = self.robot.people_near(crowd.FOLLOW_RADIUS)
+        if people is None:  # lidar people data stopped: behave as before
+            self.inputs.put(("event", event_message("arrived", exhibit, self.present_mode)))
+            return
+        if not people:
+            self.log("[观众] 到站时 3 m 内没有人")
+            self._say_now(crowd.FOLLOW_PROMPT)
+            deadline = time.monotonic() + wait_s
+            while not people:
+                time.sleep(poll_s)
+                if self.robot.status.get("state") in MOVING_STATES:
+                    return  # sent somewhere else meanwhile
+                if time.monotonic() >= deadline:
+                    self.log(f"[观众] 等了 {wait_s:.0f} 秒仍没有人，不讲解")
+                    return
+                people = self.robot.people_near(crowd.FOLLOW_RADIUS) or []
+            if self.present_mode == "face":
+                self.robot.face()
+        self.log(f"[观众] {crowd.describe(people)}")
+        self._apply_audience(people)
+        self.presenting = exhibit
+        self._gone_since = None
+        self.inputs.put(("event", event_message("arrived", exhibit, self.present_mode)))
+
+    def _apply_audience(self, people: list[dict]) -> None:
+        target = crowd.audience_for(people)
+        if self._audience_manual:
+            self.log(f"[观众] 讲解风格已手动设定，保持{AUDIENCES[self.style.audience]}模式")
+        elif target != self.style.audience:
+            self.style.update(target)
+            self._on_style(self.style)
+
+    def _crowd_tick(self, now: float) -> None:
+        """While presenting: everybody gone for GONE_S → wave and say goodbye."""
+        if self.presenting is None:
+            return
+        if self.robot.status.get("state") in MOVING_STATES:
+            self.presenting = None  # left for the next exhibit
+            return
+        people = self.robot.people_near(crowd.FOLLOW_RADIUS)
+        if people is None or people:
+            self._gone_since = None
+            return
+        if self._gone_since is None:
+            self._gone_since = now
+        elif now - self._gone_since >= crowd.GONE_S:
+            self._goodbye()
+
+    def _goodbye(self) -> None:
+        self.log("[观众] 观众都离开了，挥手告别")
+        self.presenting = None
+        self._gone_since = None
+        self._audience_manual = False  # the next group gets its own judgement
+        self.interrupt()
+        self.robot.gesture("wave")
+        self._say_now(crowd.GOODBYE)
+        self._sleep_after_turn = True
+
+    def _crowd_watch(self) -> None:
+        while self._running:
+            try:
+                self._crowd_tick(time.monotonic())
+            except Exception as exc:  # never let the watcher die mid-demo
+                self.log(f"[观众] {type(exc).__name__}: {exc}")
+            time.sleep(0.2)
 
     def _turn_worker(self) -> None:
         while self._running:
@@ -393,11 +545,19 @@ class GuideEngine:
             if self.is_echo(text):
                 self.log(f"[回声] 忽略：{text}")
                 return
-        if self.wake_word and not self.awake:
+        if self.wake_required and not self.awake:
             rest = strip_wake(text)
             if rest is None:
                 self.log(f"[待唤醒] 忽略：{text}")
                 return
+            if self.wake_mode == "vision":
+                if not self.robot.vision_live:
+                    if not self._vision_fallback_logged:
+                        self.log("[视觉唤醒] 没有相机数据（vision/watch.py 没运行？），按直接唤醒处理")
+                        self._vision_fallback_logged = True
+                elif not self.robot.facing_recently(VISION_WAKE_WINDOW_S):
+                    self.log(f"[视觉唤醒] 没看到 3 m 内有人面向机器人，忽略：{text}")
+                    return
             self.wake()
             self.log("[唤醒]")
             if not rest:  # just "你好小吉": answer at once, no LLM round trip

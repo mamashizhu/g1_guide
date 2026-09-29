@@ -11,6 +11,11 @@ Two modes, chosen by parameters (defaults = the original, user-verified mode):
 
 In both, laser endpoints are transformed through live TF and added to the grid
 before planning.  No biped gait claim is made here.
+
+讲解模式 (PLAN M5.5): /guide/present_mode ``point`` (default) or ``face``.  In
+``face`` mode the robot turns to the people on /guide/people after reaching a
+station, then reports ``arrived``; goal key ``face`` does only that turn and
+ends in ``faced``.  ``arrived`` carries ``present_mode`` and ``people_near``.
 """
 
 from __future__ import annotations
@@ -134,6 +139,10 @@ def main(args=None) -> None:
             self.create_subscription(String, "/nav/goal_key", self.on_goal, 10)
             self.create_subscription(Odometry, "/odom", self.on_odom, qos_profile_sensor_data)
             self.create_subscription(LaserScan, "/nav_scan", self.on_scan, qos_profile_sensor_data)
+            self.create_subscription(String, "/guide/people", self.on_people, 10)
+            # Volatile on purpose: it matches both plain and latched publishers.
+            # The voice side republishes the mode before every goal.
+            self.create_subscription(String, "/guide/present_mode", self.on_present_mode, 10)
             self.create_timer(0.1, self.tick)
             self.pose = None
             self.odom_at = 0.0
@@ -163,6 +172,20 @@ def main(args=None) -> None:
         def on_goal(self, message):
             self.publish_stop()
             self.publish_status(self.core.set_goal(message.data))
+
+        def on_people(self, message):
+            try:
+                people = json.loads(message.data)["people"]
+                self.core.set_people([p for p in people if {"x", "y"} <= p.keys()], time.monotonic())
+            except (ValueError, KeyError, TypeError, AttributeError):
+                return
+
+        def on_present_mode(self, message):
+            mode = message.data.strip()
+            if self.core.set_present_mode(mode):
+                self.get_logger().info(f"讲解模式：{mode}")
+            else:
+                self.get_logger().warning(f"未知讲解模式 {mode!r}，可选 point / face")
 
         def on_odom(self, message):
             if message.header.frame_id != "odom":
@@ -202,7 +225,8 @@ def main(args=None) -> None:
                     self.pending_scan = None
                     return
                 self.core.set_scan(points, (float(transform.transform.translation.x),
-                                            float(transform.transform.translation.y)))
+                                            float(transform.transform.translation.y)),
+                                   time.monotonic())
                 self.scan_at = time.monotonic()
                 self.scan_valid = True
                 self.pending_scan = None

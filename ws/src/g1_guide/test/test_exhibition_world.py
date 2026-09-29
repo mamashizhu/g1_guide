@@ -163,10 +163,15 @@ def test_every_sdf_pose_has_six_finite_values_and_hall_replaces_generated_walls(
     # The imported mesh carries the walls, so none are generated alongside it.
     for name in ("north", "south", "east", "west"):
         assert world.find(f"model[@name='wall_{name}']") is None
-    hall = next(node for node in world.findall("include")
-                if node.findtext("name") == CONFIG["hall"]["name"])
-    assert hall.findtext("uri") == CONFIG["hall"]["model_uri"]
+    # Default (baked): the mesh is visual only, the baked rectangles collide.
+    hall = world.find(f"model[@name='{CONFIG['hall']['name']}']")
     assert hall.findtext("static") == "true"
+    assert hall.find("link/collision") is None
+    assert hall.findtext("link/visual/geometry/mesh/uri") == CONFIG["hall"]["mesh_uri"]
+    walls = world.find(f"model[@name='{CONFIG['hall']['name']}_walls']")
+    assert walls.findtext("static") == "true"
+    assert len(walls.findall("link/collision")) == len(CONFIG["nav_obstacles"])
+    assert walls.find("link/visual") is None
     # The mesh has no floor of its own, so this world still supplies one.
     floor = world.find("model[@name='floor']")
     z = float(floor.findtext("pose").split()[2])
@@ -265,3 +270,36 @@ def test_additional_exhibit_uses_next_numeric_station_key():
     config["exhibits"].append(extra)
     world = ET.fromstring(generate_world(config, _assets())).find("world")
     assert world.find("model[@name='station_7']") is not None
+
+
+def test_hall_mesh_collision_mode_includes_the_fuel_model():
+    config = deepcopy(CONFIG)
+    config["hall"]["collision"] = "mesh"
+    world = ET.fromstring(generate_world(config, _assets())).find("world")
+    hall = next(node for node in world.findall("include")
+                if node.findtext("name") == CONFIG["hall"]["name"])
+    assert hall.findtext("uri") == CONFIG["hall"]["model_uri"]
+    assert hall.findtext("static") == "true"
+    assert world.find(f"model[@name='{CONFIG['hall']['name']}_walls']") is None
+
+
+def test_baked_hall_collision_boxes_match_the_planner_rectangles():
+    world = ET.fromstring(generate_world(deepcopy(CONFIG), _assets())).find("world")
+    boxes = world.findall(f"model[@name='{CONFIG['hall']['name']}_walls']/link/collision")
+    for box, item in zip(boxes, CONFIG["nav_obstacles"]):
+        x, y, z = (float(v) for v in box.findtext("pose").split()[:3])
+        sx, sy, sz = (float(v) for v in box.findtext("geometry/box/size").split())
+        assert (x, y) == pytest.approx(item["position"][:2])
+        assert (sx, sy) == pytest.approx(item["size"][:2])
+        assert z - sz / 2 == pytest.approx(CONFIG["room"]["floor_top"])
+
+
+@pytest.mark.parametrize("change", [
+    lambda h: h.update(collision="boxes"),
+    lambda h: h.pop("mesh_uri"),
+])
+def test_bad_hall_collision_settings_are_rejected(change):
+    config = deepcopy(CONFIG)
+    change(config["hall"])
+    with pytest.raises(ValueError):
+        validate_layout(config)

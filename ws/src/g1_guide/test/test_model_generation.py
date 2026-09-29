@@ -150,6 +150,32 @@ class ModelGenerationTest(unittest.TestCase):
             self.assertEqual(depth_camera.findtext("clip/far"), "10.0")
             self.assertIsNone(sensor.find("depth_camera"))
 
+    def test_front_usb_camera_is_level_and_bridged(self) -> None:
+        """PLAN M5: the add-on camera looks straight ahead, unlike the D435i."""
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            workspace = directory_path / "g1_ws"
+            source = _write_source(workspace)
+            output = directory_path / "generated.urdf"
+            GENERATOR.generate(source, output, workspace)
+            root = ET.parse(output).getroot()
+
+            mount = root.find("./joint[@name='front_camera_joint']")
+            self.assertIsNotNone(mount)
+            assert mount is not None
+            self.assertEqual(_joint_link(mount, "parent"), "torso_link")
+            self.assertEqual(mount.find("origin").get("rpy"), "0 0 0")
+            sensor = root.find("./gazebo[@reference='front_camera_link']/sensor")
+            self.assertIsNotNone(sensor)
+            assert sensor is not None
+            self.assertEqual(sensor.get("type"), "camera")
+            self.assertEqual(sensor.findtext("topic"), "/front_camera/image")
+            self.assertEqual(sensor.findtext("gz_frame_id"), "front_camera_optical_frame")
+
+        bridge = yaml.safe_load((PACKAGE_ROOT / "config/bridge.yaml").read_text(encoding="utf-8"))
+        topics = {entry["ros_topic_name"]: entry for entry in bridge}
+        self.assertTrue(topics["/front_camera/image"]["lazy"])
+
     def test_odometry_uses_connected_odom_and_base_frames(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             directory_path = Path(directory)
@@ -255,6 +281,8 @@ class ModelGenerationTest(unittest.TestCase):
                 "gz_type_name": "gz.msgs.LaserScan",
                 "direction": "GZ_TO_ROS",
                 "frame_id": "mid360_link",
+                # Rendered only while subscribed (test_sim_launch.py).
+                "lazy": True,
             },
         )
         self.assertEqual(
