@@ -3,7 +3,8 @@ r"""Windows 端视觉进程（PLAN M5）：相机 → YOLO 人 + YuNet 人脸 + 
 仿真：先在 WSL 用 vision:=true 启动（camera_jpeg 发 /front_camera/image/compressed），再运行
   vision\.venv\Scripts\python.exe vision\watch.py [--port 9090] [--show]
 笔记本摄像头（测手势、人脸，不需要仿真）：
-  vision\.venv\Scripts\python.exe vision\watch.py --camera 0 --show [--no-ros]
+  D:\g1_guide\vision\.venv\Scripts\python.exe D:\g1_guide\vision\watch.py --camera 0 --show --no-ros
+退出：在画面窗口按 q 或 Esc、点窗口的关闭按钮，或在终端按 Ctrl+C。
 
 /guide/vision（std_msgs/String，JSON）：
   {"stamp": 秒, "persons": [{box, conf, bearing_deg}], "faces": [{box, conf, distance,
@@ -77,8 +78,11 @@ def draw(image, result, hand):
             cv2.circle(image, (int(x * w), int(y * h)), 3, (255, 128, 0), -1)
     label = f"hand: {result['hand']}" + (f"  EVENT {result['gesture']}" if result["gesture"] else "")
     cv2.putText(image, label, (10, 25), 0, 0.7, (255, 255, 255), 2)
+    cv2.putText(image, "q / Esc: quit", (10, image.shape[0] - 10), 0, 0.5, (255, 255, 255), 1)
     cv2.imshow("vision", image)
-    cv2.waitKey(1)
+    key = cv2.waitKey(1) & 0xFF
+    # False = quit: q / Esc, or the window's close button (imshow would reopen it).
+    return key not in (ord("q"), 27) and cv2.getWindowProperty("vision", cv2.WND_PROP_VISIBLE) >= 1
 
 
 def main() -> None:
@@ -109,6 +113,20 @@ def main() -> None:
         print(f"[vision] 已连接 ws://{args.host}:{args.port}", flush=True)
     camera = LocalCamera(args.camera) if args.camera is not None else RosCamera(ros, args.topic)
     print(f"[vision] 图像来源：{'摄像头 %d' % args.camera if args.camera is not None else args.topic}", flush=True)
+    try:
+        loop(args, camera, core, hands, tracker, ros, pub)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if isinstance(camera, LocalCamera):
+            camera.cap.release()
+        cv2.destroyAllWindows()
+        if ros is not None:
+            ros.terminate()
+        print("[vision] 已退出", flush=True)
+
+
+def loop(args, camera, core, hands, tracker, ros, pub) -> None:
     frames, started, last_line = 0, time.monotonic(), ""
     while ros is None or ros.is_connected:
         image, stamp = camera.read()
@@ -131,8 +149,8 @@ def main() -> None:
             last_line = line
         if result["gesture"]:
             print(f"[vision] 手势事件：{result['gesture']}", flush=True)
-        if args.show:
-            draw(image, result, landmarks)
+        if args.show and not draw(image, result, landmarks):
+            return
         if frames % 50 == 0:
             print(f"[vision] {frames / (time.monotonic() - started):.1f} 帧/秒", flush=True)
     print("[vision] rosbridge 断开", flush=True)
