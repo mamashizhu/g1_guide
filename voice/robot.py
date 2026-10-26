@@ -10,6 +10,8 @@ People and presentation mode (PLAN M5.2 / M5.5):
   publish  /guide/present_mode  std_msgs/String  "point" | "face", resent before every goal
   publish  /nav/goal_key "face": turn in place to the people here
 Front camera (PLAN M5.9): subscribe /guide/vision  std_msgs/String  JSON from vision/watch.py
+跟随: publish /nav/goal_key "follow:<lidar id>" (the visitor facing the robot) or
+  "follow" (whoever stands straight ahead); "cancel" stops it.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from crowd import facing_people
 from exhibits import Exhibit
 
 # States worth telling the dialog about when the robot enters them.
-EVENT_STATES = {"arrived", "blocked", "invalid_goal", "sensor_stale"}
+EVENT_STATES = {"arrived", "blocked", "invalid_goal", "sensor_stale", "follow_lost", "no_target"}
 # Names defined in ws/src/g1_guide/config/gestures.yaml.
 GESTURES = ("wave", "point", "present", "explain_loop", "emphasize", "invite", "home")
 PRESENT_MODES = {"point": "指向展品", "face": "面向观众"}
@@ -96,6 +98,20 @@ class RobotLink:
         self._send_mode()
         self._publish(exhibit.station_key)
         return f"已出发前往 {exhibit.exhibit_id} {exhibit.title}，到达后会收到系统事件"
+
+    def follow(self) -> str:
+        """Follow the visitor who spoke: the one facing the robot within 3 m
+        right now (camera + lidar), else whoever stands straight ahead."""
+        if not self.connected:
+            return "失败：机器人未连接，无法跟随"
+        with self._lock:
+            facing = list(self.vision.get("facing_near", ())) if self.vision_live else []
+        ids = [f["person_id"] for f in facing if f.get("person_id") is not None]
+        if ids and self.facing_recently():
+            self._publish(f"follow:{ids[0]}")
+            return "已开始跟随正对机器人的游客，跟丢时会收到系统事件"
+        self._publish("follow")
+        return "已开始跟随正前方的游客，跟丢或找不到人时会收到系统事件"
 
     def stop(self) -> str:
         if not self.connected:

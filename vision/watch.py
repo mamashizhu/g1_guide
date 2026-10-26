@@ -7,9 +7,11 @@ r"""Windows 端视觉进程（PLAN M5）：相机 → YOLO 人 + YuNet 人脸 + 
 退出：在画面窗口按 q 或 Esc、点窗口的关闭按钮，或在终端按 Ctrl+C。
 
 /guide/vision（std_msgs/String，JSON）：
-  {"stamp": 秒, "persons": [{box, conf, bearing_deg}], "faces": [{box, conf, distance,
+  {"stamp": 秒, "persons": [{box, conf, bearing_deg, track_id}], "faces": [{box, conf, distance,
    bearing_deg, facing}], "facing": 正脸数, "hand": 当前手势或 null, "gesture": 本帧触发的手势事件或 null}
-bearing_deg 左正右负，和 /guide/people 同一约定。只处理最新一帧，处理不过来就丢帧。
+bearing_deg 左正右负，和 /guide/people 同一约定。track_id 是 ByteTrack 跨帧的人员编号（跟随用）。
+stamp 是图像的仿真时间，导航端按它查当时的机器人朝向。只处理最新一帧，处理不过来就丢帧。
+YOLO 默认用 GPU（vision\.venv 装的是 CUDA 版 torch），--device cpu 可强制用 CPU。
 真机上换成 UVC 摄像头的话题，代码不变。
 """
 from __future__ import annotations
@@ -69,6 +71,8 @@ class LocalCamera:
 def draw(image, result, hand):
     for p in result["persons"]:
         cv2.rectangle(image, tuple(p["box"][:2]), tuple(p["box"][2:]), (0, 200, 0), 2)
+        if p.get("track_id") is not None:
+            cv2.putText(image, f"#{p['track_id']}", (p["box"][0], p["box"][1] - 5), 0, 0.6, (0, 200, 0), 2)
     for f in result["faces"]:
         cv2.rectangle(image, tuple(f["box"][:2]), tuple(f["box"][2:]),
                       (0, 0, 255) if f["facing"] else (0, 200, 255), 2)
@@ -95,11 +99,13 @@ def main() -> None:
     parser.add_argument("--hfov", type=float, default=70.0, help="相机水平视野（度）")
     parser.add_argument("--no-ros", action="store_true", help="不连 rosbridge，只打印（配合 --camera）")
     parser.add_argument("--show", action="store_true", help="开窗口显示检测结果")
+    parser.add_argument("--device", default="auto", help="YOLO 设备：auto（有 CUDA 用 GPU）、0、cpu")
     args = parser.parse_args()
 
     import math
 
-    core = VisionCore(hfov=math.radians(args.hfov))
+    core = VisionCore(hfov=math.radians(args.hfov), device=args.device)
+    print(f"[vision] YOLO 设备：{'GPU ' + core.device if core.device != 'cpu' else 'CPU'}", flush=True)
     hands = HandDetector()
     tracker = GestureTracker()
     ros = pub = None

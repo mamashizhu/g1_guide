@@ -44,9 +44,11 @@ def _launch(context):
                             name="people_tracker", output="screen",
                             parameters=[{"scene_config": scene_config, "use_sim_time": True}]))
     if LaunchConfiguration("vision").perform(context).lower() == "true":
-        # Front USB camera as 5 Hz JPEG for the Windows vision process (PLAN M5).
+        # Front USB camera as JPEG for the Windows vision process (PLAN M5);
+        # 5 Hz by default, 10 Hz (the camera's own rate) for following.
+        rate = float(LaunchConfiguration("vision_rate").perform(context))
         actions.append(Node(package="g1_guide", executable="camera_jpeg", name="camera_jpeg",
-                            output="screen", parameters=[{"use_sim_time": True}]))
+                            output="screen", parameters=[{"use_sim_time": True, "rate_hz": rate}]))
     return actions
 
 
@@ -63,5 +65,7 @@ def generate_launch_description():
                               description="simple = 简化雷达版 (default), mid360 = 真机雷达版 + 人群感知"),
         DeclareLaunchArgument("vision", default_value="false",
                               description="true = publish the front camera as JPEG for vision/watch.py"),
+        DeclareLaunchArgument("vision_rate", default_value="5",
+                              description="JPEG rate (Hz) for vision/watch.py; the camera renders 10 Hz"),
         OpaqueFunction(function=_launch),
     ])

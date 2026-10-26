@@ -22,7 +22,8 @@ _CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6,
 CONTEXT_BONUS = 0.1   # head start for the exhibit being talked about
 FAQ_THRESHOLD = 0.15  # TF-IDF cosine; on the gallery FAQ set unrelated questions score <= 0.13,
                       # real questions >= 0.28
-STOP_WORDS = ("停", "等一下", "等等", "别走", "站住", "先别", "暂停")
+STOP_WORDS = ("停", "等一下", "等等", "别走", "站住", "先别", "暂停", "别跟")
+FOLLOW_WORDS = ("跟我来", "跟着我", "跟我走", "你跟我", "跟上我")
 GOTO_WORDS = ("带我", "去", "领我", "走", "想看", "看看", "参观")
 NEXT_WORDS = ("下一个", "下一站", "下一件", "接下来")
 CONTINUE_WORDS = ("继续走", "接着走", "走吧", "继续")
@@ -180,6 +181,8 @@ class RuleBackend:
                 return self._goto(offer)
         if _has(norm, STOP_WORDS):
             return "好的，我停下来了。", [self._call("stop_robot", {})]
+        if _has(norm, FOLLOW_WORDS):
+            return "好的，我跟着你，你走慢一点。", [self._call("follow_visitor", {})]
         if _has(norm, REPEAT_WORDS):
             return self.last_reply or "我刚才还没说什么呢。", []
         if _has(norm, NEXT_WORDS):
@@ -262,6 +265,10 @@ class RuleBackend:
             intro = self._first_sentences(exhibit.intro, INTRO_SENTENCES[self.style.audience])
             return (f"我们到了，这就是{exhibit.title}。{intro}{nxt}有问题可以随时问我。",
                     [self._call("gesture", {"name": "present", "exhibit_id": exhibit.exhibit_id})])
+        if "跟丢" in text:
+            return "抱歉，我跟丢了。请回到我面前，再说一次跟我来。", []
+        if "没找到要跟随" in text:
+            return "我没看到要跟的人，请站到我正前方，再说一次跟我来。", []
         if "挡住" in text:
             return "前面的路被挡住了，我先停一下，重新找条路。", []
         if "传感器" in text:

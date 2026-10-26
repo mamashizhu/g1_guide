@@ -16,6 +16,12 @@ before planning.  No biped gait claim is made here.
 ``face`` mode the robot turns to the people on /guide/people after reaching a
 station, then reports ``arrived``; goal key ``face`` does only that turn and
 ends in ``faced``.  ``arrived`` carries ``present_mode`` and ``people_near``.
+
+跟随: goal key ``follow`` (the person straight ahead) or ``follow:<lidar id>``
+(a /guide/people id).  Targets come from /guide/people and /guide/vision (the
+Windows YOLO process, ``vision/watch.py``); see ``follow_core``.  States
+``following`` / ``follow_waiting`` / ``follow_searching`` / ``follow_blocked``
+while it lasts, then ``follow_lost`` or ``no_target``; ``cancel`` stops it.
 """
 
 from __future__ import annotations
@@ -98,6 +104,7 @@ def main(args=None) -> None:
     from nav_msgs.msg import Odometry
     from rclpy.node import Node
     from rclpy.qos import qos_profile_sensor_data
+    from rclpy.clock import ClockType
     from rclpy.time import Time
     from sensor_msgs.msg import LaserScan
     from std_msgs.msg import String
@@ -140,6 +147,7 @@ def main(args=None) -> None:
             self.create_subscription(Odometry, "/odom", self.on_odom, qos_profile_sensor_data)
             self.create_subscription(LaserScan, "/nav_scan", self.on_scan, qos_profile_sensor_data)
             self.create_subscription(String, "/guide/people", self.on_people, 10)
+            self.create_subscription(String, "/guide/vision", self.on_vision, 10)
             # Volatile on purpose: it matches both plain and latched publishers.
             # The voice side republishes the mode before every goal.
             self.create_subscription(String, "/guide/present_mode", self.on_present_mode, 10)
@@ -179,6 +187,34 @@ def main(args=None) -> None:
                 self.core.set_people([p for p in people if {"x", "y"} <= p.keys()], time.monotonic())
             except (ValueError, KeyError, TypeError, AttributeError):
                 return
+
+        def on_vision(self, message):
+            """YOLO persons; their bearings are turned into world bearings with
+            the robot pose at the camera frame's stamp (sim time), so a turn
+            during the detection latency does not shift the target."""
+            try:
+                vision = json.loads(message.data)
+                persons = list(vision["persons"])
+                stamp = float(vision["stamp"])
+            except (ValueError, KeyError, TypeError):
+                return
+            pose = self.pose_at(stamp)
+            if pose is not None:
+                self.core.set_vision(persons, pose, time.monotonic())
+
+        def pose_at(self, stamp: float):
+            try:
+                # ROS (sim) clock, like the Time.from_msg stamps used elsewhere.
+                transform = self.tf_buffer.lookup_transform(
+                    self.global_frame, "base_link",
+                    Time(nanoseconds=int(stamp * 1e9), clock_type=ClockType.ROS_TIME))
+            except TransformException:
+                return self.pose   # stamp outside the TF buffer: the newest pose
+            t = transform.transform
+            try:
+                return Pose2D(float(t.translation.x), float(t.translation.y), yaw_of(t.rotation))
+            except ValueError:
+                return None
 
         def on_present_mode(self, message):
             mode = message.data.strip()

@@ -23,7 +23,7 @@
 5. [启动方式](#5-启动方式)
 6. [功能详解与修改方法](#6-功能详解与修改方法)
    - 6.1 展馆与展品 · 6.2 机器人模型 · 6.3 导航 · 6.4 讲解手势 · 6.5 雷达人群感知
-   - 6.6 语音对话 · 6.7 视觉 · 6.8 SLAM · 6.9 低阶控制 · 6.10 步态训练（MuJoCo / Isaac）
+   - 6.6 语音对话 · 6.7 视觉 · 6.8 SLAM · 6.9 低阶控制 · 6.10 步态训练（MuJoCo / Isaac） · 6.11 跟随
 7. [测试](#7-测试)
 8. [工具脚本](#8-工具脚本)
 9. [已知问题与限制](#9-已知问题与限制)
@@ -46,6 +46,7 @@
 | 语音对话 | ✅ / 🟡 | 离线识别和合成、大模型 + 离线兜底、唤醒词、打断、讲解风格、GUI 都已完成，用户亲测过；接仿真的端到端测试待做 |
 | 雷达人群感知 | ✅ | 数 3 m 内人数、判断是否单个儿童，决定是否开讲、用哪种讲解模式、观众走光后告别 |
 | 视觉 | 🟡 | 视觉唤醒仿真里已打通；手势指令代码完成，等对着摄像头验收；展品识别按决定取消 |
+| 跟随（YOLO + 雷达） | ✅ / 🟡 | 「跟我来」跟随一位游客：GPU YOLO + ByteTrack 认人、雷达定位。Gazebo 单人场景通过（含开窗口目视）；多人干扰场景离线通过率待提高 |
 | 网页远程控制 | ❌ | 计划用 roslibjs 做手机可打开的控制台 |
 | 交付 | ❌ | 一键启动、回归脚本、报告、演示视频 |
 | 崎岖地形步态 | 🟡 | 第三版策略在 Isaac 13 项测试全部 ≥ 98.4%、零摔倒；MuJoCo 里 6 条跑道过 3 条，差距未查清 |
@@ -71,14 +72,14 @@
 
 | 话题 | 类型 | 方向 | 内容 |
 |---|---|---|---|
-| `/nav/goal_key` | String | → 导航 | 展位键 `1`–`6`；`0` / `cancel` 取消；`face` 转向人群 |
+| `/nav/goal_key` | String | → 导航 | 展位键 `1`–`6`；`0` / `cancel` 取消；`face` 转向人群；`follow` / `follow:<雷达 id>` 跟随 |
 | `/nav/status` | String（JSON） | 导航 → | `state`、`goal_key`、`replans` 等；state 见 [6.3](#63-导航) |
 | `/guide/gesture` | String | → 手势 | 动作名如 `wave`，或 JSON `{"name":"point","exhibit":"E03"}` |
 | `/guide/gesture_status` | String（JSON） | 手势 → | 动作执行 / 拒绝的原因 |
 | `/guide/present_mode` | String | → 导航、手势 | 到站后 `point` 指向展品 / `face` 面向观众 |
 | `/guide/people` | String（JSON） | 人群 → | 每人的位置、方位、距离、身高、是否儿童、组内人数 |
-| `/guide/vision` | String（JSON） | 视觉 → | 人框、人脸（方位、距离、是否正对）、当前手势、手势事件 |
-| `/front_camera/image/compressed` | CompressedImage | → 视觉 | 前置相机 5 Hz JPEG（`vision:=true` 时） |
+| `/guide/vision` | String（JSON） | 视觉 → 语音、导航 | 人框（方位、ByteTrack `track_id`）、人脸（方位、距离、是否正对）、当前手势、手势事件、图像时间戳 |
+| `/front_camera/image/compressed` | CompressedImage | → 视觉 | 前置相机 JPEG（`vision:=true` 时；默认 5 Hz，`vision_rate:=10` 可调） |
 | `/cmd_vel` | Twist | 导航 → Gazebo | 平移模型速度 |
 | `/scan`、`/nav_scan` | LaserScan | Gazebo → | 360 线雷达；导航用雷达 |
 | `/odom`、`/odom_truth` | Odometry | | 里程计；真机雷达版下 `/odom` 带漂移，真值在 `/odom_truth` |
@@ -324,7 +325,7 @@ vision\.venv\Scripts\python.exe vision\watch.py --show
 vision\.venv\Scripts\python.exe vision\watch.py --camera 0 --show --no-ros
 ```
 
-参数：`--host` / `--port` rosbridge 地址；`--topic` 图像话题；`--hfov 70` 相机水平视野（度）。退出：画面窗口按 q / Esc，或终端 Ctrl+C。
+参数：`--host` / `--port` rosbridge 地址；`--topic` 图像话题；`--hfov 70` 相机水平视野（度）；`--device auto|0|cpu` YOLO 设备（默认有 CUDA 就用 GPU）。画面里人框上的 `#N` 是 ByteTrack 轨迹编号。退出：画面窗口按 q / Esc，或终端 Ctrl+C。
 
 ### 5.5 一套完整演示（推荐顺序）
 
@@ -668,7 +669,9 @@ E04 神奈川冲浪里：……
 
 **划界原则**：视觉只做数据库里没有的东西。展品位置、名称、机器人位姿都已知，不再用视觉确认；**避障只靠雷达**（雷达直接测距 10 Hz，视觉延迟大得多）。展品识别、OCR 读展牌已按决定取消。
 
-**链路**：WSL `camera_jpeg`（前置相机 5 Hz JPEG）→ rosbridge → Windows `vision/watch.py`（YOLO 人、YuNet 人脸、MediaPipe 手势，CPU 约 1.6 帧/秒，处理不过来就丢旧帧）→ `/guide/vision` → 语音端。视觉代码只吃图像，不依赖 ROS 和 Gazebo，真机换 USB 摄像头的话题即可。
+**链路**：WSL `camera_jpeg`（前置相机 5 Hz JPEG）→ rosbridge → Windows `vision/watch.py`（YOLO 人 + ByteTrack、YuNet 人脸、MediaPipe 手势，处理不过来就丢旧帧）→ `/guide/vision` → 语音端、导航（跟随）。
+
+**GPU**（2026-10-12）：`vision/.venv` 改装 CUDA 版 torch（`torch==2.9.0+cu126`，只装进 venv，不动 `D:\python`）和 ByteTrack 依赖 `lap`。YOLO 单帧 CPU 53 ms → GPU 24 ms，但整条流程仍只有约 3 帧/秒，瓶颈不在 YOLO（可能是 YuNet、MediaPipe 或 rosbridge 传图，未查清）。视觉代码只吃图像，不依赖 ROS 和 Gazebo，真机换 USB 摄像头的话题即可。
 
 **是否正对机器人**（`vision/vision_core.py`）：YuNet 检出正脸（侧脸本来就检不出），且两眼间距 ≥ 脸宽的 0.25、鼻尖偏离两眼中点 < 两眼间距的 0.35。参数：`FACING_EYE_RATIO`、`FACING_NOSE_OFFSET`。
 
@@ -740,6 +743,42 @@ E04 神奈川冲浪里：……
 
 Isaac 自己录不了视频：服务器上用 `record_demo.py` 记录位姿，本地 `mujoco/replay_demo.py` 渲染成 mp4。
 
+### 6.11 跟随（YOLO + 雷达）
+
+游客说「跟我来」（或发 `/nav/goal_key follow`），机器人跟在他身后约 1.2–1.9 m；人停下就停、转身面向他；说「停」「别跟了」结束。
+
+**分工**：YOLO（前置相机，GPU，ByteTrack 轨迹编号）决定**跟谁**；雷达人群 `/guide/people`（MID-360，360°）给出**位置**。两者按方位匹配（≤ 8°）。只有简化 2D 雷达时，用 YOLO 方位 + 该方位上的雷达测距定位。避障、规划、后退脱困复用 `nav_core`。
+
+**代码**：
+- `follow_core.PersonFollower`（纯逻辑）：选目标、跟踪、速度估计（约 1 s 窗口的位移）、换 ID 纠正、跟丢后找回。
+- `nav_core.NavigatorCore._follow_step`：保持距离、规划、搜索、结束。`exhibition_nav` 订阅 `/guide/vision`，按图像时间戳（仿真时钟）查当时的机器人位姿，补偿检测延迟。
+- 语音端：工具 `follow_visitor`，离线意图 `FOLLOW_WORDS`；`robot.follow()` 有正对机器人的人脸时发 `follow:<雷达 id>`，否则发 `follow`（选正前方的人）。
+
+**选人**：有相机时，取最靠近正前方的 YOLO 人，再找方位匹配的雷达人（两人站在一起被雷达聚成一团时，团中心在两人之间，放宽到 25°）；没相机时取 3 m、±50° 内最靠近正前方的雷达人（不取最近的，最近的可能是旁观者）。
+
+**状态**（`/nav/status`）：`follow_starting` → `following` / `follow_waiting`（在停留带内，原地转向他）/ `follow_blocked` / `follow_searching`（超过 0.8 s 没看到：先去最后看到的位置，朝他走的方向看 2 s，再原地转圈）→ 结束：`follow_lost`（15 s 没看到）或 `no_target`（3 s 内没选到人）。语音端把这两个结束状态当系统事件提示游客。跟随中手臂保持 home。
+
+**难点和处理**：
+- 雷达把两人聚成一团（`group > 1`）：记下合并前的速度，分开时选沿原速度外推最近的那个；只看到一人时不急着判，最多等 1.5 s，或由 YOLO 方位确认。
+- 雷达跟踪器换错 ID：只有 0.35 s 内的新鲜相机数据、偏差 ≥ 15° 且横向 ≥ 0.4 m、并且相机方位上确实有另一个人时，才改跟那个人；否则保留雷达 ID。
+- 目标自己的身体会留在障碍记忆里：规划时去掉目标 0.6 m 内的点，以及目标走过的路上当前扫描已经看不到的旧点；当前还看得见的点（箱子、旁边站着的人）保留。
+- 跟随速度上限 0.8 m/s（导览的 0.6 m/s 跟不上走路的人）。
+
+**参数**：`follow_core.py` 顶部（`FOLLOW_DISTANCE` 1.2、`HOLD_BAND` 0.3、`MATCH_BEARING`、`LOST_S` 15 s 等）；`nav_core.py` 的 `FOLLOW_*`、`SEARCH_*`。
+
+**测试**：
+- 离线：`python3 tools/follow_sim.py [--scene simple] [场景名 -v]`，8 个场景（walk、lidar_only、vision_only、detour、cross、swap、stop_go、vanish）。人会绕开机器人，雷达按真机方式断轨、合并、换 ID。2026-10-12：只有领路人的 6 个场景两个展馆 × 10 个随机种子全过；有干扰者的 cross / swap 有失败（大展馆 cross 有 YOLO 6/10、swap 仅雷达 6/10，简单展馆 8–10/10），待改进。
+- Gazebo（简单展馆，只有一个参观者在走：用 set_pose 按 0.5 m/s 移动 Fuel「Standing person」）：
+  ```bash
+  GUI=1 bash /mnt/d/g1_guide/tools/follow_gz_sim.sh followgui                 # WSL；去掉 GUI=1 为无窗口
+  vision\.venv\Scripts\python.exe vision\watch.py --port 9097 --show        # Windows
+  bash /mnt/d/g1_guide/tools/follow_gz_sim.sh leader followgui --route walk   # WSL 另一个终端；short 为短路线
+  ```
+  合格：最后打印 `"result": "ok"`；行走时间距 ≤ 5 m；停下后 25 s 内 `follow_waiting`、间距 ≤ 1.9 m、朝向误差 ≤ 20°。逐帧记录在 `.navrun/<名>/follow_log.csv`。停止：`touch /mnt/d/g1_guide/.navrun/followgui/stop`。
+  2026-10-12 实测：短路线（6 m）间距平均 1.82 / 最大 1.92 m；长路线（17 m，3 个转弯）无窗口 1.87 / 2.46 m、开窗口 1.86 / 2.33 m；停下后约 0.8 s 停在 1.55 m，朝向误差 ≤ 0.1°，全程没跟丢。
+
+**未做**：语音「跟我来」接 Gazebo 的端到端测试；多人干扰场景的离线通过率；真机 MID-360 在人群里的 ID 稳定性。
+
 ---
 
 ## 7. 测试
@@ -767,6 +806,7 @@ vision\.venv\Scripts\python.exe -m pytest vision\tests
 | `voice\tests\sim_echo.py` | 只有回声时不误打断 |
 | `voice\tests\sim_crowd.py` + `tools/crowd_e2e_sim.sh` | Gazebo 端到端：到站没人 → "大家跟上了吗" → 放人 → 儿童模式、转身讲解 → 删人 → 挥手告别 |
 | `voice\tests\sim_vision_wake.py` + `VISION=true bash tools/crowd_e2e_sim.sh vision` | 视觉唤醒：正对 → 唤醒，背对、侧身 → 忽略 |
+| `tools/follow_gz_sim.sh` + `vision\watch.py` + `follow_gz_sim.sh leader` | 跟随：参观者沿路线走，机器人跟上并停稳，见 [6.11](#611-跟随yolo--雷达) |
 
 导航离线 / Gazebo 测试见 [6.3](#63-导航)；MuJoCo 跑道无窗口测试见 5.8 的 `--check-all`。
 
@@ -779,6 +819,8 @@ vision\.venv\Scripts\python.exe -m pytest vision\tests
 | `tools/nav_sim.py` | 离线导航仿真（与 Gazebo 同一份决策代码） |
 | `tools/nav_gz_tour.sh` | Gazebo 里自动走一条路线，日志写到 `.navrun/` |
 | `tools/nav_speed_log.py` | 记录每秒速度和实时率 |
+| `tools/follow_sim.py` | 离线跟随仿真（8 个场景，与 Gazebo 同一份决策代码） |
+| `tools/follow_gz_sim.sh`、`follow_gz_leader.py` | Gazebo 跟随测试：仿真端（`GUI=1` 开窗口）、领路人 + 判定 |
 | `tools/spawn_box.sh` / `remove_box.sh` | 放 / 删障碍箱 |
 | `tools/people_gz_check.sh`、`people_watch.py` | 人群感知 Gazebo 检查与实时查看 |
 | `tools/crowd_e2e_sim.sh` | 人群 / 视觉端到端测试的仿真端 |

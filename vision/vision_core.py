@@ -8,6 +8,11 @@ its landmarks catch the rest (the nose must sit between the eyes).  How far
 that person is comes from the lidar (``voice/crowd.facing_people``); the face-width
 estimate (adult face about 0.16 m) is only a fallback -- simulated visitors'
 faces are small and read about twice as far as they are.
+
+People are tracked across frames with ByteTrack (ultralytics ``track``): each
+person carries a ``track_id`` that the follower (``follow_core``) uses to tell
+its target from a neighbour.  YOLO runs on the GPU when CUDA torch is installed
+(RTX 4060: ~24 ms per 640x480 frame, CPU ~53 ms).
 """
 
 from __future__ import annotations
@@ -45,25 +50,35 @@ def face_facing(face: np.ndarray) -> bool:
 
 class VisionCore:
     def __init__(self, hfov: float = math.radians(70), person_conf: float = 0.4,
-                 face_conf: float = 0.6):
+                 face_conf: float = 0.6, device: str = "auto", track: bool = True):
         import cv2
+        import torch
         from ultralytics import YOLO
 
         self.hfov = hfov
         self.person_conf = person_conf
+        if device == "auto":
+            device = "0" if torch.cuda.is_available() else "cpu"
+        self.device = device
+        self.track = track
         self.yolo = YOLO(str(MODELS / "yolo11n.pt"))
         self.face = cv2.FaceDetectorYN.create(str(MODELS / "face_detection_yunet_2023mar.onnx"),
                                               "", (640, 480), face_conf)
 
     def analyze(self, image: np.ndarray) -> dict:
         h, w = image.shape[:2]
-        result = self.yolo(image, classes=[0], conf=self.person_conf, verbose=False)[0]
+        options = dict(classes=[0], conf=self.person_conf, verbose=False, device=self.device)
+        if self.track:
+            result = self.yolo.track(image, persist=True, tracker="bytetrack.yaml", **options)[0]
+        else:
+            result = self.yolo(image, **options)[0]
         persons = []
         for box in result.boxes:
             x1, y1, x2, y2 = (float(v) for v in box.xyxy[0])
             persons.append({"box": [round(x1), round(y1), round(x2), round(y2)],
                             "conf": round(float(box.conf), 2),
-                            "bearing_deg": round(bearing_deg((x1 + x2) / 2, w, self.hfov), 1)})
+                            "bearing_deg": round(bearing_deg((x1 + x2) / 2, w, self.hfov), 1),
+                            "track_id": int(box.id) if box.id is not None else None})
         self.face.setInputSize((w, h))
         _, raw = self.face.detect(image)
         faces = []

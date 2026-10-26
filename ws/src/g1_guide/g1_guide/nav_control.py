@@ -69,8 +69,12 @@ def compute_command(
     final: bool = False,
     arrival_distance: float = ARRIVAL_DISTANCE,
     turn_clearance: float = 0.0,
+    max_linear: float = MAX_LINEAR_SPEED,
 ) -> Velocity:
     """Track a waypoint while enforcing speed, obstacle, and arrival limits.
+
+    ``max_linear`` caps the forward speed (following a visitor uses more than
+    the default touring speed).
 
     ``waypoint`` guides travel along the planned path. ``goal`` supplies the
     terminal position and heading; the terminal heading is aligned only after
@@ -102,6 +106,8 @@ def compute_command(
             return _zero("invalid")
         if not (math.isfinite(arrival_distance) and arrival_distance > 0.0):
             return _zero("invalid")
+        if not (math.isfinite(max_linear) and max_linear > 0.0):
+            return _zero("invalid")
         if math.isnan(turn_clearance) or turn_clearance < 0.0:
             return _zero("invalid")
     except (AttributeError, TypeError, ValueError, OverflowError):
@@ -109,7 +115,7 @@ def compute_command(
 
     try:
         command = _compute_validated(pose, waypoint, goal, forward_clearance, final,
-                                     arrival_distance)
+                                     arrival_distance, max_linear)
     except (TypeError, ValueError, OverflowError):
         # Finite but extreme values can still overflow during subtraction or
         # angle wrapping. Treat those derived invalid values as unsafe too.
@@ -132,6 +138,7 @@ def _compute_validated(
     forward_clearance: float,
     final: bool,
     arrival_distance: float = ARRIVAL_DISTANCE,
+    max_linear: float = MAX_LINEAR_SPEED,
 ) -> Velocity:
     goal_distance = math.hypot(goal.x - pose.x, goal.y - pose.y)
     goal_yaw_error = _wrapped_angle(goal.yaw - pose.yaw)
@@ -167,7 +174,7 @@ def _compute_validated(
     # Linear speed tapers only when closing on the goal, not on each path
     # vertex; sharp corners still stop and turn in place above.
     target_distance = math.hypot(target_dx, target_dy)
-    linear = min(MAX_LINEAR_SPEED, target_distance if final else goal_distance)
+    linear = min(max_linear, target_distance if final else goal_distance)
     linear *= math.cos(heading_error)
     return Velocity(linear, angular, "moving")
 

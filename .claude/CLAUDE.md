@@ -115,6 +115,13 @@ bash /mnt/d/g1_guide/ws/build.sh
   3. 后方 ±30° 的检查范围对 G1 的身体宽度（约 0.5 m）够不够，是否需要放宽到 ±45° 以上。
   4. 真机点云稀疏、噪声大，前方回波判断会不会让机器人来回“进一步退一步”。
 
+## 跟随（2026-10-12）
+
+- goal key `follow` / `follow:<雷达 id>`，决策在 `follow_core.PersonFollower` + `nav_core._follow_step`（与 ROS 无关），说明见 README 6.11。YOLO 认人、雷达 `/guide/people` 定位，所以要 `lidar:=mid360 vision:=true`；只有简化雷达时退回 YOLO 方位 + 激光测距。
+- 改跟随先跑离线 `python3 tools/follow_sim.py`（两个展馆加 `--scene simple`），再跑 Gazebo `tools/follow_gz_sim.sh`（`GUI=1` 开窗口；`leader <名> --route short|walk` 放领路人并判定）。用户要求先测最简单的场景：只有一个人在走，不加移动的人当障碍。
+- 视觉端 `vision/.venv` 装的是 CUDA 版 torch（`2.9.0+cu126`，只装进 venv；venv 继承 `D:\python` 的系统包，那里是 CPU 版，pip 会误以为已满足，要写全 `+cu126` 加 `--ignore-installed --no-deps`）和 `lap`（ByteTrack）。
+- Git Bash 调 `wsl -e bash /mnt/...` 要加 `MSYS_NO_PATHCONV=1`，否则路径被改写成 `D:/Git/mnt/...`。
+
 ## 验证原则
 
 - 用户要求**可视化验证**：每完成一项，给出用户能亲眼看到效果的命令和合格标准。

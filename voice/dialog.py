@@ -14,7 +14,7 @@ from llm import Tool, ToolCall
 from robot import GESTURES
 
 MAX_TOOL_ROUNDS = 3
-NAV_TOOLS = {"goto_exhibit", "stop_robot"}
+NAV_TOOLS = {"goto_exhibit", "stop_robot", "follow_visitor"}
 AUDIENCES = {"normal": "普通", "child": "儿童", "expert": "专业"}
 _STYLE_TAG = re.compile(r"^\[风格：(\S+?)模式，幽默(\d+)/10\]\s*")
 
@@ -77,6 +77,7 @@ def split_style(text: str) -> tuple[Style | None, str]:
 class Robot(Protocol):
     def goto(self, exhibit_id: str) -> str: ...
     def stop(self) -> str: ...
+    def follow(self) -> str: ...
     def gesture(self, name: str, exhibit_id: str = "") -> str: ...
     def describe_status(self) -> str: ...
 
@@ -92,6 +93,10 @@ def build_tools(exhibits: list[Exhibit]) -> list[Tool]:
                                             "enum": [e.exhibit_id for e in exhibits]}},
               "required": ["exhibit_id"]}),
         Tool("stop_robot", "立即停止机器人移动。游客说停、等一下、别走了时调用。",
+             {"type": "object", "properties": {}}),
+        Tool("follow_visitor",
+             "让机器人跟着游客走，保持在游客身后一米多。游客说“跟我来”“跟着我”“你跟我走”时调用；"
+             "跟的是正对着机器人、站在它前面的那位游客。游客说停、别跟了时调用 stop_robot。",
              {"type": "object", "properties": {}}),
         Tool("get_robot_status", "查询机器人当前的移动状态和目标。",
              {"type": "object", "properties": {}}),
@@ -142,6 +147,7 @@ def build_system_prompt(exhibits: list[Exhibit]) -> str:
 - 调用 goto_exhibit 后机器人才刚出发，不要说“已经到了”。
 - 到达后你会收到一条以“[系统事件]”开头的消息，这不是游客说的话。收到“已到达”后，直接开始讲解该展品，结尾推荐下一站。
 - 游客让你停下时调用 stop_robot。
+- 游客说“跟我来”“跟着我”时调用 follow_visitor，并说一句“好的，我跟着你”。跟随途中不讲解、不做手势；跟丢或找不到人时会收到系统事件。
 - 说话时可以配合 gesture：打招呼、道别时 wave；到达展品开始讲解时先 point 指向该展品，再 explain_loop；讲完一段、等游客提问时 home。调用 goto_exhibit 的同一轮不要做手势。手势要和话一起调用，不要单独调用。
 - 游客的话由语音识别得到，可能有同音错字，请按最合理的意思理解；实在听不懂就请游客再说一遍。
 
@@ -161,6 +167,8 @@ def event_message(state: str, exhibit: Exhibit | None, present_mode: str = "poin
         "blocked": f"[系统事件] 前往 {name} 的路线被挡住了，机器人正在停车重新规划。请向游客简短说明。",
         "invalid_goal": "[系统事件] 导航目标无效。",
         "sensor_stale": "[系统事件] 机器人传感器数据中断，暂时无法移动。请向游客致歉。",
+        "follow_lost": "[系统事件] 跟丢了要跟随的游客，机器人已停下。请简短致歉，请游客回到机器人面前再说一次“跟我来”。",
+        "no_target": "[系统事件] 没找到要跟随的游客（机器人正前方 3 米内没有人）。请游客站到机器人正前方再说一次“跟我来”。",
     }.get(state, f"[系统事件] 机器人状态：{state}")
 
 
@@ -180,6 +188,8 @@ class GuideDialog:
             return self.robot.goto(str(call.args.get("exhibit_id", "")))
         if call.name == "stop_robot":
             return self.robot.stop()
+        if call.name == "follow_visitor":
+            return self.robot.follow()
         if call.name == "get_robot_status":
             return self.robot.describe_status()
         if call.name == "set_style":
