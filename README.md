@@ -557,6 +557,8 @@ bash tools/nav_gz_tour.sh <名字> 4 5
 
 ### 6.6 语音对话
 
+> 每个环节按什么条件、什么顺序判断（唤醒、回声与打断、大模型与离线规则的切换、离线意图顺序、什么时候用儿童模式等），见 [docs/voice-decision-logic.md](docs/voice-decision-logic.md)。
+
 **链路**：麦克风（按名称选，默认关键字 Realtek）→ WebRTC 回声消除（可选）→ silero VAD 切句 → SenseVoice int8 离线识别（实时率约 0.1）→ 唤醒判定 → 大模型工具调用（失败自动转离线规则）→ Matcha 离线合成（每句约 0.2 秒）→ 扬声器；同时通过 rosbridge 控制机器人。
 
 **两个"大脑"**：
