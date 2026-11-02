@@ -17,6 +17,10 @@ before planning.  No biped gait claim is made here.
 station, then reports ``arrived``; goal key ``face`` does only that turn and
 ends in ``faced``.  ``arrived`` carries ``present_mode`` and ``people_near``.
 
+/nav/view (std_msgs/String JSON, 5 Hz) is for the web console's map only:
+robot pose, the remaining planned path, scan endpoints and remembered
+dynamic obstacles, all in the global frame (see ``view_payload``).
+
 跟随: goal key ``follow`` (the person straight ahead) or ``follow:<lidar id>``
 (a /guide/people id).  Targets come from /guide/people and /guide/vision (the
 Windows YOLO process, ``vision/watch.py``); see ``follow_core``.  States
@@ -34,6 +38,28 @@ import time
 # Re-exported: the geometry helpers moved to nav_core with the decision logic.
 from .nav_core import (NavigatorCore, StaticGeometry, forward_clearance,  # noqa: F401
                        known_static_hit, nearest_distance, plan_with_escape, wrap_angle)
+
+
+def _thin(points, limit: int) -> list[list[float]]:
+    step = max(1, math.ceil(len(points) / limit))
+    return [[round(x, 2), round(y, 2)] for x, y in list(points)[::step]]
+
+
+def view_payload(core: NavigatorCore, pose, frame: str, scan_limit: int = 240,
+                 obstacle_limit: int = 200) -> dict:
+    """/nav/view: what the planner sees, thinned for the web console map."""
+    path = []
+    if core.goal_key is not None and core.path:
+        remaining = core.path[core.path_index:]
+        path = ([[round(pose.x, 2), round(pose.y, 2)]] if pose is not None else []) + _thin(remaining, 400)
+    return {
+        "frame": frame,
+        "pose": None if pose is None else [round(pose.x, 3), round(pose.y, 3), round(pose.yaw, 3)],
+        "goal_key": core.goal_key,
+        "path": path,
+        "scan": _thin(core.scan_points, scan_limit),
+        "obstacles": _thin(core.dynamic_points, obstacle_limit),
+    }
 
 
 def yaw_of(quaternion) -> float:
@@ -143,6 +169,7 @@ def main(args=None) -> None:
             self.tf_listener = TransformListener(self.tf_buffer, self)
             self.cmd_pub = self.create_publisher(Twist, "/cmd_vel", 10)
             self.status_pub = self.create_publisher(String, "/nav/status", 10)
+            self.view_pub = self.create_publisher(String, "/nav/view", 1)
             self.create_subscription(String, "/nav/goal_key", self.on_goal, 10)
             self.create_subscription(Odometry, "/odom", self.on_odom, qos_profile_sensor_data)
             self.create_subscription(LaserScan, "/nav_scan", self.on_scan, qos_profile_sensor_data)
@@ -152,6 +179,7 @@ def main(args=None) -> None:
             # The voice side republishes the mode before every goal.
             self.create_subscription(String, "/guide/present_mode", self.on_present_mode, 10)
             self.create_timer(0.1, self.tick)
+            self.create_timer(0.2, self.publish_view)
             self.pose = None
             self.odom_at = 0.0
             self.scan_at = 0.0
@@ -176,6 +204,16 @@ def main(args=None) -> None:
                 self.last_state = encoded
                 self.last_status_name = state
                 self.last_status_at = now
+
+        def publish_view(self):
+            if self.view_pub.get_subscription_count() == 0:
+                return
+            try:
+                encoded = json.dumps(view_payload(self.core, self.pose, self.global_frame),
+                                     allow_nan=False)
+            except ValueError:
+                return
+            self.view_pub.publish(String(data=encoded))
 
         def on_goal(self, message):
             self.publish_stop()

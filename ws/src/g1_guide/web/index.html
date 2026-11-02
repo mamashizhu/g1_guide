@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>G1 展馆导览机器人 · 展示控制台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">G1 展馆导览机器人 <span>展示控制台</span></div>
+  <nav class="tabs" id="pageTabs">
+    <button data-page="tour" class="active">导览演示</button>
+    <button data-page="gait">步态训练</button>
+    <button data-page="system">系统状态</button>
+  </nav>
+  <div class="pills">
+    <span class="pill" id="pillRos">rosbridge 未连接</span>
+    <span class="pill" id="pillNav">导航 —</span>
+    <span class="pill" id="pillVoice">语音 未运行</span>
+    <span class="pill" id="pillVision">视觉 未运行</span>
+    <span class="pill" id="pillPeople">雷达人群 —</span>
+  </div>
+</header>
+
+<main id="page-tour" class="page active">
+  <section class="panel sim">
+    <div class="panel-head">
+      <h2>仿真画面（Gazebo 实时渲染）</h2>
+      <div class="seg" data-target="simImg">
+        <button data-stream="chase" class="active">第三人称跟拍</button>
+        <button data-stream="overview">展馆俯视</button>
+      </div>
+    </div>
+    <div class="video-box"><img id="simImg" alt="Gazebo 画面"></div>
+  </section>
+
+  <section class="panel robotview">
+    <div class="panel-head">
+      <h2>机器人视角</h2>
+      <div class="seg" data-target="robotImg">
+        <button data-stream="front" class="active">前置相机 + 视觉</button>
+        <button data-stream="head">头部 D435 彩色</button>
+        <button data-stream="depth">D435 深度</button>
+      </div>
+    </div>
+    <div class="video-box" id="robotBox">
+      <img id="robotImg" alt="机器人视角">
+      <canvas id="visionOverlay"></canvas>
+      <div class="overlay-text" id="visionText"></div>
+    </div>
+  </section>
+
+  <section class="panel map">
+    <div class="panel-head">
+      <h2>导航地图 <small>点站位圆圈可直接前往</small></h2>
+      <div class="legend">
+        <i class="lg robot"></i>机器人 <i class="lg path"></i>规划路径 <i class="lg scan"></i>雷达
+        <i class="lg dyn"></i>动态障碍 <i class="lg adult"></i>游客 <i class="lg child"></i>儿童
+      </div>
+    </div>
+    <div class="map-box"><canvas id="mapCanvas"></canvas></div>
+  </section>
+
+  <section class="panel voice">
+    <div class="panel-head">
+      <h2>语音对话 <small id="llmLabel"></small></h2>
+      <div class="voice-state"><span class="lamp" id="voiceLamp"></span><span id="voiceState">语音端未运行</span>
+        <div class="meter"><div id="micLevel"></div></div></div>
+    </div>
+    <div class="chat" id="chat"></div>
+    <div class="chips" id="chips"></div>
+    <form class="say" id="sayForm">
+      <input id="sayInput" placeholder="打字和小吉说话（不需要唤醒词）" autocomplete="off">
+      <button type="submit">发送</button>
+      <button type="button" id="btnInterrupt" class="warn">打断</button>
+    </form>
+    <div class="voice-opts">
+      <label>讲解风格 <select id="optAudience"><option value="normal">普通</option><option value="child">儿童</option><option value="expert">专业</option></select></label>
+      <label>幽默 <input type="range" id="optHumor" min="0" max="10" step="1"><b id="humorVal">3</b></label>
+      <label>到站后 <select id="optPresent"><option value="point">指向展品</option><option value="face">面向观众</option></select></label>
+      <label><input type="checkbox" id="optWake"> 唤醒词</label>
+      <label>唤醒方式 <select id="optWakeMode"><option value="direct">直接唤醒</option><option value="vision">视觉唤醒</option></select></label>
+      <label><input type="checkbox" id="optCrowd"> 按雷达人数讲解</label>
+      <label><input type="checkbox" id="optMic"> 麦克风</label>
+      <label><input type="checkbox" id="optBarge"> 插话打断</label>
+      <label><input type="checkbox" id="optLog"> 显示日志</label>
+    </div>
+  </section>
+
+  <section class="panel control">
+    <div class="panel-head"><h2>导航与动作</h2></div>
+    <div class="ctl-group"><div class="ctl-title">去展位</div><div class="btns" id="stationBtns"></div></div>
+    <div class="ctl-group"><div class="ctl-title">导航</div>
+      <div class="btns">
+        <button class="warn" data-goal="cancel">停止</button>
+        <button data-goal="face">转向观众</button>
+        <button data-goal="follow">跟随前方游客</button>
+      </div>
+    </div>
+    <div class="ctl-group"><div class="ctl-title">讲解手势</div><div class="btns" id="gestureBtns"></div></div>
+    <div class="nav-detail" id="navDetail">等待 /nav/status …</div>
+    <div class="perc-inline">
+      <div><div class="ctl-title">雷达人群（MID-360）</div><div id="peopleList" class="list">无数据（需要 lidar:=mid360）</div></div>
+      <div><div class="ctl-title">视觉（YOLO + 人脸 + 手势）</div><div id="visionList" class="list">无数据（需要 vision\watch.py）</div></div>
+    </div>
+    <div class="ctl-title">事件</div><div id="eventList" class="list events"></div>
+  </section>
+
+</main>
+
+<main id="page-gait" class="page">
+  <section class="panel wide">
+    <div class="panel-head"><h2>崎岖地形步态训练（Isaac Lab 训练 → MuJoCo 回放）</h2></div>
+    <p class="note">与 ROS / Gazebo 主线独立的实验：16384 个机器人并行 PPO，地形课程含台阶 5～23 cm、坡度 0～23°。
+      视频是服务器上 Isaac 记录的位姿在本地 MuJoCo 里渲染的回放（README 6.10）。现场跑 MuJoCo：Windows 双击 <code>mujoco\run_g1_walk.bat</code>。</p>
+    <div id="gaitList" class="gait-grid">加载中…</div>
+  </section>
+</main>
+
+<main id="page-system" class="page">
+  <section class="panel wide">
+    <div class="panel-head"><h2>相机流</h2></div>
+    <p class="note">画面只在网页正在看时才订阅，没人看 3 秒后取消订阅，Gazebo 停止渲染该相机（减少 WSL 渲染内存泄漏）。</p>
+    <div id="streamList" class="list"></div>
+  </section>
+  <section class="panel wide">
+    <div class="panel-head"><h2>低阶控制画面 <small>需要 ros2 launch g1_guide lowlevel.launch.py + web.launch.py</small></h2>
+      <button id="btnLowlevel">显示 / 隐藏</button></div>
+    <div class="video-box small" id="lowlevelBox" hidden><img id="lowlevelImg" alt="低阶控制"></div>
+  </section>
+  <section class="panel wide">
+    <div class="panel-head"><h2>ROS 话题</h2><button id="btnTopics">刷新</button></div>
+    <div id="topicList" class="list mono"></div>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

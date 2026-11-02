@@ -11,6 +11,7 @@
 ## 启动命令
 
 ```bash
+ros2 launch g1_guide demo.launch.py             # 完整演示 + 网页控制台 http://localhost:8080（Windows 双击 demo.cmd 一键全开）
 ros2 launch g1_guide exhibition_nav.launch.py   # 展馆 + 导航
 ros2 run g1_guide nav_keyboard                  # 数字键 1–6 选展位
 ros2 topic pub --once /guide/gesture std_msgs/String "data: wave"   # 讲解手势（exhibition_nav 已带 gesture_player）
@@ -114,6 +115,14 @@ bash /mnt/d/g1_guide/ws/build.sh
   2. 真机倒退步态的稳定性和实际速度，0.15 m/s 是否合适。
   3. 后方 ±30° 的检查范围对 G1 的身体宽度（约 0.5 m）够不够，是否需要放宽到 ±45° 以上。
   4. 真机点云稀疏、噪声大，前方回波判断会不会让机器人来回“进一步退一步”。
+
+## 网页展示控制台（2026-11-02）
+
+- `demo_web` 节点（http://localhost:8080，页面在 `ws/src/g1_guide/web/`）+ rosbridge，由 `web.launch.py` 启动；`demo.launch.py` = `exhibition_nav`（mid360 + vision）+ `web.launch.py`。说明见 README 5.10 / 6.12。
+- 相机画面只在网页正在看时订阅（3 秒后取消），不要改成常订阅，否则渲染泄漏回来。
+- 「Gazebo 画面」是 `g1_sim.launch.py` 启动时注入的跟拍相机（`lidar_variants.with_chase_camera`，`chase_camera:=false` 关掉），不是 Gazebo 窗口本身。
+- 在 `web.launch.py` 里 include rosbridge 必须 `GroupAction(scoped=True)`：rosbridge 自己的 `port` 参数会泄漏，曾让网页服务去绑 9090。
+- `demo_web` 的静态文件路径不能 `resolve()`：symlink 安装的文件指向源码目录，会被当成越界返回 403。
 
 ## 跟随（2026-10-12）
 

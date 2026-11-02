@@ -216,12 +216,16 @@ class GuideEngine:
         self._sleep_after_turn = False
         self._running = True
         self._ready = threading.Event()
+        self.web = None             # web_link.WebLink once rosbridge is connected
 
     # ---- lifecycle ----
     def start(self) -> None:
         threading.Thread(target=self.backend.warmup, daemon=True).start()
-        if self.use_robot:
-            self.robot.connect()
+        if self.use_robot and self.robot.connect():
+            from web_link import WebLink
+
+            # 网页展示控制台：对话和状态发到 /guide/voice，接收 /guide/voice_cmd。
+            self.web = WebLink(self, self.robot._ros)
         threading.Thread(target=self._turn_worker, daemon=True).start()
         if self.use_robot:
             threading.Thread(target=self._crowd_watch, daemon=True).start()
@@ -232,6 +236,8 @@ class GuideEngine:
 
     def close(self) -> None:
         self._running = False
+        if self.web is not None:
+            self.web.close()
         self.interrupt()
         if self.listener is not None:
             self.listener.stop()

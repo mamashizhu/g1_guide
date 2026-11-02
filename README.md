@@ -23,7 +23,7 @@
 5. [启动方式](#5-启动方式)
 6. [功能详解与修改方法](#6-功能详解与修改方法)
    - 6.1 展馆与展品 · 6.2 机器人模型 · 6.3 导航 · 6.4 讲解手势 · 6.5 雷达人群感知
-   - 6.6 语音对话 · 6.7 视觉 · 6.8 SLAM · 6.9 低阶控制 · 6.10 步态训练（MuJoCo / Isaac） · 6.11 跟随
+   - 6.6 语音对话 · 6.7 视觉 · 6.8 SLAM · 6.9 低阶控制 · 6.10 步态训练（MuJoCo / Isaac） · 6.11 跟随 · 6.12 网页展示控制台
 7. [测试](#7-测试)
 8. [工具脚本](#8-工具脚本)
 9. [已知问题与限制](#9-已知问题与限制)
@@ -47,7 +47,7 @@
 | 雷达人群感知 | ✅ | 数 3 m 内人数、判断是否单个儿童，决定是否开讲、用哪种讲解模式、观众走光后告别 |
 | 视觉 | 🟡 | 视觉唤醒仿真里已打通；手势指令代码完成，等对着摄像头验收；展品识别按决定取消 |
 | 跟随（YOLO + 雷达） | ✅ / 🟡 | 「跟我来」跟随一位游客：GPU YOLO + ByteTrack 认人、雷达定位。Gazebo 单人场景通过（含开窗口目视）；多人干扰场景离线通过率待提高 |
-| 网页远程控制 | ❌ | 计划用 roslibjs 做手机可打开的控制台 |
+| 网页展示控制台 | ✅ | 一个页面看 Gazebo 跟拍 / 俯视画面、机器人视角（叠加 YOLO 框）、2D 导航地图、语音对话，并能下达导航、手势、语音指令；还有步态训练视频页。2026-11-02 在 Gazebo 里实测通过 |
 | 交付 | ❌ | 一键启动、回归脚本、报告、演示视频 |
 | 崎岖地形步态 | 🟡 | 第三版策略在 Isaac 13 项测试全部 ≥ 98.4%、零摔倒；MuJoCo 里 6 条跑道过 3 条，差距未查清 |
 
@@ -380,6 +380,29 @@ export ROS_DOMAIN_ID=42 GZ_PARTITION=mine
 ```
 
 在 WSL 里跑仿真要让 `wsl` 命令常驻，不要 `nohup … &` 后退出，进程会被回收。
+
+### 5.10 网页展示控制台（演示用，推荐）
+
+一键：Windows 双击项目根目录的 `demo.cmd`。它会开一个 WSL 窗口运行仿真，等 rosbridge 起来后再开视觉、语音（终端版，在它的窗口按回车可打断），最后用浏览器打开 http://localhost:8080 。关掉 WSL 窗口即停止仿真。
+
+```bash
+demo.cmd
+```
+`demo.cmd headless:=true` 不开 Gazebo 窗口（网页里的跟拍画面照常有，内存泄漏少很多，长时间演示推荐）；`demo.cmd nosim` 表示仿真已经在 WSL 里开着。语音参数用环境变量传，例如 `set G1_VOICE_ARGS=--barge-in --wake`。
+
+分步启动：
+```bash
+ros2 launch g1_guide demo.launch.py
+```
+等于 `exhibition_nav.launch.py lidar:=mid360 vision:=true` 加 `web.launch.py`（rosbridge + 网页服务 `demo_web`）。然后 Windows 端照常开 `vision\watch.py` 和 `voice\run.cmd`（或 `voice\gui.cmd`），浏览器打开 http://localhost:8080 。
+
+和其他 launch 搭配（SLAM 地图导航、低阶控制等）只加网页：
+```bash
+ros2 launch g1_guide web.launch.py
+```
+场景不是大展馆时加 `scene_config:=<同一个 json>`，网页地图按它画；已经单独开了 rosbridge 时加 `rosbridge:=false`；端口 `web_port:=8080`、`rosbridge_port:=9090`。
+
+合格标准（目视）：顶部 rosbridge、导航、语音、视觉、雷达人群几个状态都变绿；跟拍画面能看到机器人；点地图上的站位圆圈或「去展位」按钮，机器人出发，地图上出现绿色规划路径和红色雷达点；在语音框打「带我去看青花瓷」，小吉回答并出发，到站后自动讲解；前置相机画面上有 YOLO 人框（`#编号`）和人脸框。
 
 ---
 
@@ -778,6 +801,32 @@ Isaac 自己录不了视频：服务器上用 `record_demo.py` 记录位姿，�
   2026-10-12 实测：短路线（6 m）间距平均 1.82 / 最大 1.92 m；长路线（17 m，3 个转弯）无窗口 1.87 / 2.46 m、开窗口 1.86 / 2.33 m；停下后约 0.8 s 停在 1.55 m，朝向误差 ≤ 0.1°，全程没跟丢。
 
 **未做**：语音「跟我来」接 Gazebo 的端到端测试；多人干扰场景的离线通过率；真机 MID-360 在人群里的 ID 稳定性。
+
+### 6.12 网页展示控制台
+
+展示时一个页面看全部功能（启动见 5.10）。纯静态页面，不依赖外网和 npm 包，手机或别的电脑也能打开（把 `localhost` 换成本机 IP，并放通 8080、9090 端口）。
+
+| 页面区域 | 内容 | 数据来源 |
+|---|---|---|
+| 仿真画面 | 第三人称跟拍（跟着机器人走）/ 展馆俯视，都是 Gazebo 实时渲染 | `/chase_camera/image`、`/exhibition/overview` → `demo_web` MJPEG |
+| 机器人视角 | 前置相机 + YOLO 人框、人脸框（红 = 正对机器人）、当前手势；头部 D435 彩色 / 深度（伪彩色） | `/front_camera/image`、`/camera/image`、`/camera/depth_image`；框来自 `/guide/vision` |
+| 导航地图 | 墙体、展品、站位（点一下就去）、机器人、规划路径、雷达点、动态障碍记忆、雷达人群（粉色 = 儿童，白圈 = 跟随目标）、3 m 讲解范围；SLAM 模式下叠加 `/map` | `/api/scene`、`/nav/view`、`/guide/people` |
+| 语音对话 | 对话记录（流式）、语音状态灯、音量条、大模型状态；打字、快捷话术、打断；讲解风格、幽默、到站后指向 / 面向观众、唤醒词和唤醒方式、按雷达人数讲解、麦克风、插话打断 | `/guide/voice`、`/guide/voice_cmd` |
+| 导航与动作 | 去 1–6 号展位、停止、转向观众、跟随；7 个讲解手势；`/nav/status` 全部字段；雷达人群列表；视觉统计；事件日志 | `/nav/goal_key`、`/guide/gesture` |
+| 步态训练页 | 三版策略的 MuJoCo 回放视频和 Isaac 13 项地形评估表 | `mujoco/policies/*/demo`、`eval_*.jsonl` |
+| 系统状态页 | 各相机流是否在推、观看人数；低阶控制俯视画面；ROS 话题列表 | `/api/streams`、rosapi |
+
+**架构**：
+
+- `demo_web`（WSL，`g1_guide/demo_web.py`）：http.server + rclpy。相机画面编码成 MJPEG（`/stream/<名>`），**只有网页正在看某路画面时才订阅**，最后一个观看者断开 3 秒后取消订阅，Gazebo 就不再渲染这个相机（桥接是 lazy 的，减少 WSL 渲染泄漏）。切到别的页面会断开导览页的画面。帧率上限在 `STREAMS`（跟拍、前置 8 Hz，俯视 2 Hz）。还提供 `/api/scene`（展馆配置）、`/media/`（演示视频，支持拖动）。启动时把 OpenCV 写的 `mp4v` 演示视频转一份浏览器能播的 H.264（`demo_web.mp4`，已在 `.gitignore`）。
+- 网页其余数据直接走 rosbridge（`web/app.js` 里自带一个几十行的 rosbridge 客户端，不用 roslibjs）。
+- **跟拍相机**：`g1_sim.launch.py chase_camera:=true`（默认开）在启动时往模型里加一个挂在骨盆上的相机，位置 `chase_pose`（默认身后 1.6 m、离地约 3.2 m、俯视 47°；展馆没有屋顶，所以高处不会被墙挡）。代码 `lidar_variants.with_chase_camera`，不改生成的 URDF，不用重新 `build.sh`。
+- **`/nav/view`**（`exhibition_nav`，5 Hz，只在有人订阅时发）：位姿、剩余路径、雷达端点、动态障碍记忆，都在全局坐标系，已抽稀。
+- **语音端**（`voice/web_link.py`）：`GuideEngine` 连上 rosbridge 后自动挂接，终端版和窗口版都有。把对话事件和每 0.3 秒的状态发到 `/guide/voice`，执行 `/guide/voice_cmd` 的指令；网页打开时会请求补发最近 200 条对话。网页改的设置窗口版 GUI 不会同步显示。
+
+**怎么改**：页面在 `ws/src/g1_guide/web/`（`index.html`、`style.css`、`app.js`），symlink 安装，改完刷新浏览器即可；**新增文件要重新 `build.sh`**。快捷话术 `CHIPS`、手势按钮 `GESTURES`、状态中文名 `NAV_STATE` 在 `app.js` 开头；加相机流改 `demo_web.py` 的 `STREAMS` 并在 `index.html` 加按钮。
+
+**实测**（2026-11-02，大展馆 headless）：网页点站位导航、语音打字「带我去看星月夜」出发并在受阻时解释、到站指向手势、跟拍 / 俯视 / 前置 / D435 彩色和深度画面、YOLO 和人脸叠加框（视觉约 2.6 帧/秒）、步态视频播放、离开页面后相机取消订阅，都正常。
 
 ---
 

@@ -26,6 +26,7 @@ setup(
          glob("assets/exhibition/posters/*.png")),
         (os.path.join("share", package_name, "urdf"), glob("urdf/*")),
         (os.path.join("share", package_name, "scripts"), glob("scripts/*.py")),
+        (os.path.join("share", package_name, "web"), glob("web/*")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -48,6 +49,7 @@ setup(
             "odom_drift = g1_guide.odom_drift:main",
             "people_tracker = g1_guide.people_tracker:main",
             "camera_jpeg = g1_guide.camera_jpeg:main",
+            "demo_web = g1_guide.demo_web:main",
         ],
     },
 )

@@ -7,6 +7,7 @@ mid360 (真机雷达版): the model publishes a 3D cloud and truth odometry, so 
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 LIDAR_VARIANTS = ("simple", "mid360")
@@ -81,3 +82,53 @@ def with_camera_rate(urdf: str, rate: float) -> str:
         raise ValueError(f"camera_rate must be in (0, 1000) Hz, got {rate}")
     return re.sub(r'(<sensor name="d435_rgbd"[^>]*>.*?<update_rate>)[^<]*(</update_rate>)',
                   lambda m: f"{m[1]}{rate:g}{m[2]}", urdf, count=1, flags=re.S)
+
+
+# 展示用第三人称跟拍相机（网页控制台 demo_web 的「Gazebo 画面」）：挂在骨盆上，
+# 在机器人身后上方往前下方看；展馆没有屋顶，高处的相机不会被墙挡住。
+# 只在有人订阅 /chase_camera/image 时渲染（桥接 lazy，见 exhibition.launch.py）。
+CHASE_CAMERA_POSE = "-1.6 0 2.4 0 0.82 0"   # 相对 pelvis（离地约 0.8 m）：x y z roll pitch yaw
+CHASE_CAMERA_TOPIC = "/chase_camera/image"
+
+
+def with_chase_camera(urdf: str, pose: str = CHASE_CAMERA_POSE, rate: float = 10.0) -> str:
+    """Add the third-person chase camera to a generated glide model's text.
+
+    A model without ``pelvis`` (or one that already has the camera) is
+    returned unchanged.
+    """
+    values = pose.split()
+    if len(values) != 6 or not all(_is_number(v) for v in values):
+        raise ValueError(f"chase camera pose needs 6 numbers 'x y z roll pitch yaw', got {pose!r}")
+    rate = float(rate)
+    if not (rate > 0.0 and rate < 1000.0):
+        raise ValueError(f"chase camera rate must be in (0, 1000) Hz, got {rate}")
+    if '<link name="pelvis"' not in urdf or 'name="chase_camera"' in urdf:
+        return urdf
+    block = (
+        '  <gazebo reference="pelvis">\n'
+        '    <sensor name="chase_camera" type="camera">\n'
+        f'      <pose>{" ".join(values)}</pose>\n'
+        '      <always_on>true</always_on>\n'
+        '      <visualize>false</visualize>\n'
+        f'      <update_rate>{rate:g}</update_rate>\n'
+        f'      <topic>{CHASE_CAMERA_TOPIC}</topic>\n'
+        '      <camera>\n'
+        '        <horizontal_fov>1.45</horizontal_fov>\n'
+        '        <image><width>960</width><height>540</height><format>R8G8B8</format></image>\n'
+        '        <clip><near>0.1</near><far>60</far></clip>\n'
+        '      </camera>\n'
+        '    </sensor>\n'
+        '  </gazebo>\n'
+    )
+    end = urdf.rfind("</robot>")
+    if end < 0:
+        raise ValueError("model text has no </robot>")
+    return urdf[:end] + block + urdf[end:]
+
+
+def _is_number(text: str) -> bool:
+    try:
+        return math.isfinite(float(text))
+    except ValueError:
+        return False

@@ -6,6 +6,8 @@ the GPU GUI.  ``gui_render:=software`` runs a GPU server plus a separate
 llvmpipe GUI: no WSL d3d12 leak in the GUI (CLAUDE.md), but a low frame rate
 in the imported hall.
 ``camera_rate`` sets the head RGBD camera rate (default 10 Hz, model 30 Hz).
+``chase_camera:=true`` (default) adds the third-person camera used by the web
+console (/chase_camera/image); it renders only while someone subscribes.
 """
 
 from pathlib import Path
@@ -20,7 +22,7 @@ from launch_ros.actions import Node
 
 
 def _validate_model(context, *args, **kwargs):
-    from g1_guide.lidar_variants import with_camera_rate
+    from g1_guide.lidar_variants import with_camera_rate, with_chase_camera
 
     package_share = Path(get_package_share_directory("g1_guide"))
     model_file = Path(LaunchConfiguration("model_file").perform(context))
@@ -34,8 +36,10 @@ def _validate_model(context, *args, **kwargs):
         )
     urdf = model_file.read_text(encoding="utf-8")
     spawned = Path(tempfile.mkdtemp(prefix="g1-model-")) / model_file.name
-    spawned.write_text(with_camera_rate(urdf, LaunchConfiguration("camera_rate").perform(context)),
-                       encoding="utf-8")
+    spawn_urdf = with_camera_rate(urdf, LaunchConfiguration("camera_rate").perform(context))
+    if LaunchConfiguration("chase_camera").perform(context).lower() == "true":
+        spawn_urdf = with_chase_camera(spawn_urdf, LaunchConfiguration("chase_pose").perform(context))
+    spawned.write_text(spawn_urdf, encoding="utf-8")
     return [
         Node(
             package="ros_gz_sim",
@@ -64,6 +68,8 @@ def _validate_model(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    from g1_guide.lidar_variants import CHASE_CAMERA_POSE
+
     package_share = Path(get_package_share_directory("g1_guide"))
     default_world = str(package_share / "worlds" / "classroom.sdf")
     default_bridge = str(package_share / "config" / "bridge.yaml")
@@ -83,6 +89,10 @@ def generate_launch_description():
                                   description="gpu = GPU GUI (default), software = llvmpipe GUI (no leak, low fps)"),
             DeclareLaunchArgument("camera_rate", default_value="10",
                                   description="Head RGBD camera Hz; rendered only while subscribed"),
+            DeclareLaunchArgument("chase_camera", default_value="true",
+                                  description="Third-person camera for the web console (rendered only while viewed)"),
+            DeclareLaunchArgument("chase_pose", default_value=CHASE_CAMERA_POSE,
+                                  description="Chase camera pose relative to the pelvis: x y z roll pitch yaw"),
             DeclareLaunchArgument("spawn_x", default_value="0.0"),
             DeclareLaunchArgument("spawn_y", default_value="0.0"),
             DeclareLaunchArgument("spawn_yaw", default_value="0.0"),

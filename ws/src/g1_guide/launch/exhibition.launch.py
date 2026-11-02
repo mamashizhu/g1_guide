@@ -29,6 +29,11 @@ def _launch(context):
         "direction": "GZ_TO_ROS", "frame_id": "exhibition_overview",
         # Rendered only while someone subscribes (see config/bridge.yaml).
         "lazy": True,
+    }, {
+        # Third-person camera on the robot (g1_sim.launch.py chase_camera) for the web console.
+        "ros_topic_name": "/chase_camera/image", "gz_topic_name": "/chase_camera/image",
+        "ros_type_name": "sensor_msgs/msg/Image", "gz_type_name": "gz.msgs.Image",
+        "direction": "GZ_TO_ROS", "frame_id": "chase_camera", "lazy": True,
     }]), encoding="utf-8")
     spawn = config["spawn"]
     return [IncludeLaunchDescription(
